@@ -823,6 +823,12 @@ static int mmc_blk_cmd_recovery(struct mmc_card *card, struct request *req,
 	    (brq->cmd.resp[0] & R1_CARD_ECC_FAILED))
 		*ecc_err = 1;
 
+	/* Flag ECC errors */
+	if ((status & R1_CARD_ECC_FAILED) ||
+	    (brq->stop.resp[0] & R1_CARD_ECC_FAILED) ||
+	    (brq->cmd.resp[0] & R1_CARD_ECC_FAILED))
+		*ecc_err = 1;
+
 	/*
 	 * Check the current card state.  If it is in some data transfer
 	 * mode, tell it to stop (and hopefully transition back to TRAN.)
@@ -1029,6 +1035,10 @@ out_retry:
 	if (!err)
 		mmc_blk_reset_success(md, type);
 out:
+	if (err == -EIO && !mmc_blk_reset(md, card->host, type))
+		goto retry;
+	if (!err)
+		mmc_blk_reset_success(md, type);
 	spin_lock_irq(&md->lock);
 	__blk_end_request(req, err, blk_rq_bytes(req));
 	spin_unlock_irq(&md->lock);
