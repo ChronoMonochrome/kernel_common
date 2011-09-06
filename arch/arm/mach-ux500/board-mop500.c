@@ -43,6 +43,7 @@
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
+#include <asm/hardware/gic.h>
 
 #include <plat/gpio-nomadik.h>
 #include <plat/i2c.h>
@@ -1277,6 +1278,7 @@ MACHINE_START(U8500, "ST-Ericsson MOP500 platform")
 	.init_irq	= ux500_init_irq,
 	/* we re-use nomadik timer here */
 	.timer		= &ux500_timer,
+	.handle_irq	= gic_handle_irq,
 	.init_machine	= mop500_init_machine,
 	.restart	= ab8500_restart,
 MACHINE_END
@@ -1301,6 +1303,7 @@ MACHINE_START(HREFV60, "ST-Ericsson U8500 Platform HREFv60+")
 	.timer		= &ux500_timer,
 	.init_machine	= mop500_init_machine,
 	.restart	= ab8500_restart,
+	.handle_irq	= gic_handle_irq,
 MACHINE_END
 
 MACHINE_START(SNOWBALL, "ST-Ericsson Snowball platform")
@@ -1311,5 +1314,6 @@ MACHINE_START(SNOWBALL, "ST-Ericsson Snowball platform")
 	.timer		= &ux500_timer,
 	.init_machine	= mop500_init_machine,
 	.restart	= ux500_restart,
+	.handle_irq	= gic_handle_irq,
 MACHINE_END
 

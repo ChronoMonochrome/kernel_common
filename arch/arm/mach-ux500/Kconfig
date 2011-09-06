@@ -14,6 +14,7 @@ config UX500_SOC_COMMON
 config UX500_SOC_DBX500
 	depends on UX500_SOC_DB5500 || UX500_SOC_DB8500
 	bool
+	select MULTI_IRQ_HANDLER
 
 menu "Ux500 SoC"
 
