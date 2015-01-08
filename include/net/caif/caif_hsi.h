@@ -1,8 +1,13 @@
 /*
+<<<<<<< HEAD
  * Copyright (C) ST-Ericsson AB 2010
  * Contact: Sjur Brendeland / sjur.brandeland@stericsson.com
  * Author:  Daniel Martensson / daniel.martensson@stericsson.com
  *	    Dmitry.Tarnyagin  / dmitry.tarnyagin@stericsson.com
+=======
+ * Copyright (C) ST-Ericsson SA 2010
+ * Author:	Daniel Martensson <Daniel.Martensson@stericsson.com>
+>>>>>>> 79ef41b... 00122_include_net
  * License terms: GNU General Public License (GPL) version 2
  */
 
@@ -11,7 +16,10 @@
 
 #include <net/caif/caif_layer.h>
 #include <net/caif/caif_device.h>
+<<<<<<< HEAD
 #include <linux/atomic.h>
+=======
+>>>>>>> 79ef41b... 00122_include_net
 
 /*
  * Maximum number of CAIF frames that can reside in the same HSI frame.
@@ -31,14 +39,21 @@
 #define CFHSI_DBG_PREFILL		0
 
 /* Structure describing a HSI packet descriptor. */
+<<<<<<< HEAD
 #pragma pack(1) /* Byte alignment. */
+=======
+>>>>>>> 79ef41b... 00122_include_net
 struct cfhsi_desc {
 	u8 header;
 	u8 offset;
 	u16 cffrm_len[CFHSI_MAX_PKTS];
 	u8 emb_frm[CFHSI_MAX_EMB_FRM_SZ];
+<<<<<<< HEAD
 };
 #pragma pack() /* Default alignment. */
+=======
+} __packed;
+>>>>>>> 79ef41b... 00122_include_net
 
 /* Size of the complete HSI packet descriptor. */
 #define CFHSI_DESC_SZ (sizeof(struct cfhsi_desc))
@@ -68,6 +83,7 @@ struct cfhsi_desc {
 #define CFHSI_TX_STATE_XFER			1
 
 #define CFHSI_RX_STATE_DESC			0
+<<<<<<< HEAD
 #define CFHSI_RX_STATE_PAYLOAD			1
 
 /* Bitmasks for power management. */
@@ -87,17 +103,24 @@ struct cfhsi_desc {
 #define CFHSI_WAKEUP_TOUT			(3 * HZ)
 #endif /* CFHSI_WAKEUP_TOUT */
 
+=======
+#define CFHSI_RX_STATE_PAYLOAD		1
+>>>>>>> 79ef41b... 00122_include_net
 
 /* Structure implemented by the CAIF HSI driver. */
 struct cfhsi_drv {
 	void (*tx_done_cb) (struct cfhsi_drv *drv);
 	void (*rx_done_cb) (struct cfhsi_drv *drv);
+<<<<<<< HEAD
 	void (*wake_up_cb) (struct cfhsi_drv *drv);
 	void (*wake_down_cb) (struct cfhsi_drv *drv);
+=======
+>>>>>>> 79ef41b... 00122_include_net
 };
 
 /* Structure implemented by HSI device. */
 struct cfhsi_dev {
+<<<<<<< HEAD
 	int (*cfhsi_up) (struct cfhsi_dev *dev);
 	int (*cfhsi_down) (struct cfhsi_dev *dev);
 	int (*cfhsi_tx) (u8 *ptr, int len, struct cfhsi_dev *dev);
@@ -106,6 +129,10 @@ struct cfhsi_dev {
 	int (*cfhsi_wake_down) (struct cfhsi_dev *dev);
 	int (*cfhsi_fifo_occupancy)(struct cfhsi_dev *dev, size_t *occupancy);
 	int (*cfhsi_rx_cancel)(struct cfhsi_dev *dev);
+=======
+	int (*cfhsi_tx) (u8 *ptr, int len, struct cfhsi_dev *dev);
+	int (*cfhsi_rx) (u8 *ptr, int len, struct cfhsi_dev *dev);
+>>>>>>> 79ef41b... 00122_include_net
 	struct cfhsi_drv *drv;
 };
 
@@ -119,14 +146,18 @@ struct cfhsi {
 	struct cfhsi_dev *dev;
 	int tx_state;
 	int rx_state;
+<<<<<<< HEAD
 	int rx_len;
 	u8 *rx_ptr;
+=======
+>>>>>>> 79ef41b... 00122_include_net
 	u8 *tx_buf;
 	u8 *rx_buf;
 	spinlock_t lock;
 	int flow_off_sent;
 	u32 q_low_mark;
 	u32 q_high_mark;
+<<<<<<< HEAD
 	struct list_head list;
 	struct work_struct wake_up_work;
 	struct work_struct wake_down_work;
@@ -138,6 +169,10 @@ struct cfhsi {
 	wait_queue_head_t flush_fifo_wait;
 	struct timer_list timer;
 	unsigned long bits;
+=======
+	bool flow_stop;
+	struct list_head list;
+>>>>>>> 79ef41b... 00122_include_net
 };
 
 extern struct platform_driver cfhsi_driver;
