@@ -385,7 +385,7 @@ ENDPROC(__pabt_svc)
 	@ if it was interrupted in a critical region.  Here we
 	@ perform a quick test inline since it should be false
 	@ 99.9999% of the time.  The rest is done out of line.
-	cmp	r4, #TASK_SIZE
+	cmp	r2, #TASK_SIZE
 	blhs	kuser_cmpxchg64_fixup
 #endif
 #endif
@@ -450,7 +450,7 @@ __und_usr:
 	blo	__und_usr_unknown
 3:	ldrht	r0, [r4]
 	add	r2, r2, #2			@ r2 is PC + 2, make it PC + 4
-	orr	r0, r0, r5, lsl #16
+	orr    	r0, r0, r5, lsl #16
 #else
 	b	__und_usr_unknown
 #endif
@@ -782,13 +782,13 @@ __kuser_cmpxchg64:				@ 0xffff0f60
 	.text
 kuser_cmpxchg64_fixup:
 	@ Called from kuser_cmpxchg_fixup.
-	@ r4 = address of interrupted insn (must be preserved).
+	@ r2 = address of interrupted insn (must be preserved).
 	@ sp = saved regs. r7 and r8 are clobbered.
 	@ 1b = first critical insn, 2b = last critical insn.
-	@ If r4 >= 1b and r4 <= 2b then saved pc_usr is set to 1b.
+	@ If r2 >= 1b and r2 <= 2b then saved pc_usr is set to 1b.
 	mov	r7, #0xffff0fff
 	sub	r7, r7, #(0xffff0fff - (0xffff0f60 + (1b - __kuser_cmpxchg64)))
-	subs	r8, r4, r7
+	subs	r8, r2, r7
 	rsbcss	r8, r8, #(2b - 1b)
 	strcs	r7, [sp, #S_PC]
 #if __LINUX_ARM_ARCH__ < 6
