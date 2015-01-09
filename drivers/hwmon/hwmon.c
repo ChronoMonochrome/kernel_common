@@ -95,6 +95,24 @@ void hwmon_notify(unsigned long val, void *v)
 }
 EXPORT_SYMBOL(hwmon_notify);
 
+int hwmon_notifier_register(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&hwmon_notifier_list, nb);
+}
+EXPORT_SYMBOL(hwmon_notifier_register);
+
+int hwmon_notifier_unregister(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&hwmon_notifier_list, nb);
+}
+EXPORT_SYMBOL(hwmon_notifier_unregister);
+
+void hwmon_notify(unsigned long val, void *v)
+{
+	blocking_notifier_call_chain(&hwmon_notifier_list, val, v);
+}
+EXPORT_SYMBOL(hwmon_notify);
+
 static void __init hwmon_pci_quirks(void)
 {
 #if defined CONFIG_X86 && defined CONFIG_PCI
