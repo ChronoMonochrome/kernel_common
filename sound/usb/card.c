@@ -90,6 +90,8 @@ static bool ignore_ctl_error;
 
 struct switch_dev switch_audio_detection;
 
+struct switch_dev switch_audio_detection;
+
 module_param_array(index, int, NULL, 0444);
 MODULE_PARM_DESC(index, "Index value for the USB audio adapter.");
 module_param_array(id, charp, NULL, 0444);
