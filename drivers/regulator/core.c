@@ -84,6 +84,7 @@ struct regulator {
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs;
 #endif
+	int use;
 };
 
 static int _regulator_is_enabled(struct regulator_dev *rdev);
@@ -175,11 +176,13 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 		 */
 		if (!regulator->min_uV && !regulator->max_uV)
 			continue;
-
-		if (*max_uV > regulator->max_uV)
-			*max_uV = regulator->max_uV;
-		if (*min_uV < regulator->min_uV)
-			*min_uV = regulator->min_uV;
+		
+		if (regulator->use) {
+			if (*max_uV > regulator->max_uV)
+				*max_uV = regulator->max_uV;
+			if (*min_uV < regulator->min_uV)
+				*min_uV = regulator->min_uV;
+		}
 	}
 
 	if (*min_uV > *max_uV)
@@ -578,6 +581,32 @@ static ssize_t regulator_suspend_standby_state_show(struct device *dev,
 static DEVICE_ATTR(suspend_standby_state, 0444,
 		regulator_suspend_standby_state_show, NULL);
 
+static ssize_t regulator_use_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = dev_get_drvdata(dev);
+	struct regulator *reg;
+	size_t size = 0;
+
+	if (rdev->use_count == 0)
+		return sprintf(buf, "no users\n");
+
+	list_for_each_entry(reg, &rdev->consumer_list, list) {
+		if (!reg->use)
+			continue;
+
+		if (reg->dev != NULL)
+			size += sprintf((buf + size), "%s (%d) ",
+					dev_name(reg->dev), reg->use);
+		else
+			size += sprintf((buf + size), "unknown (%d) ",
+					reg->use);
+	}
+	size += sprintf((buf + size), "\n");
+
+	return size;
+}
+static DEVICE_ATTR(use, 0444, regulator_use_show, NULL);
 
 /*
  * These are the only attributes are present for all regulators.
@@ -1378,12 +1407,8 @@ static int _regulator_enable(struct regulator_dev *rdev)
 
 			trace_regulator_enable_delay(rdev_get_name(rdev));
 
-			if (delay >= 1000) {
-				mdelay(delay / 1000);
-				udelay(delay % 1000);
-			} else if (delay) {
-				udelay(delay);
-			}
+			if (delay)
+				usleep_range(delay, delay);
 
 			trace_regulator_enable_complete(rdev_get_name(rdev));
 
@@ -1424,8 +1449,10 @@ int regulator_enable(struct regulator *regulator)
 	mutex_lock(&rdev->mutex);
 	ret = _regulator_enable(rdev);
 	mutex_unlock(&rdev->mutex);
+	if (ret == 0)
+		regulator->use++;
 
-	if (ret != 0)
+	if (ret != 0 && rdev->supply)
 		regulator_disable(rdev->supply);
 
 	return ret;
@@ -1499,6 +1526,9 @@ int regulator_disable(struct regulator *regulator)
 
 	if (ret == 0 && rdev->supply)
 		regulator_disable(rdev->supply);
+
+	if (ret == 0)
+		regulator->use--;
 
 	return ret;
 }
@@ -2439,6 +2469,10 @@ static int add_regulator_attributes(struct regulator_dev *rdev)
 	struct regulator_ops	*ops = rdev->desc->ops;
 	int			status = 0;
 
+	status = device_create_file(dev, &dev_attr_use);
+	if (status < 0)
+		dev_warn(dev, "Create sysfs file \"use\" failed");
+
 	/* some attributes need specific methods to be displayed */
 	if (ops->get_voltage || ops->get_voltage_sel) {
 		status = device_create_file(dev, &dev_attr_microvolts);
@@ -2832,6 +2866,13 @@ void regulator_has_full_constraints(void)
 }
 EXPORT_SYMBOL_GPL(regulator_has_full_constraints);
 
+#ifdef CONFIG_SAMSUNG_PANIC_DISPLAY_DEVICES
+struct list_head *regulator_regulator_map_list(void)
+{
+	return &regulator_map_list;
+}
+EXPORT_SYMBOL_GPL(regulator_regulator_map_list);
+#endif
 /**
  * regulator_use_dummy_regulator - Provide a dummy regulator when none is found
  *
