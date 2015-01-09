@@ -142,6 +142,16 @@ int pm_generic_suspend_noirq(struct device *dev)
 EXPORT_SYMBOL_GPL(pm_generic_suspend_noirq);
 
 /**
+ * pm_generic_suspend_noirq - Generic suspend_noirq callback for subsystems.
+ * @dev: Device to suspend.
+ */
+int pm_generic_suspend_noirq(struct device *dev)
+{
+	return __pm_generic_call(dev, PM_EVENT_SUSPEND, true);
+}
+EXPORT_SYMBOL_GPL(pm_generic_suspend_noirq);
+
+/**
  * pm_generic_suspend - Generic suspend callback for subsystems.
  * @dev: Device to suspend.
  */
@@ -253,6 +263,16 @@ static int __pm_generic_resume(struct device *dev, int event, bool noirq)
 	return pm && pm->resume_early ? pm->resume_early(dev) : 0;
 }
 EXPORT_SYMBOL_GPL(pm_generic_resume_early);
+
+/**
+ * pm_generic_resume_noirq - Generic resume_noirq callback for subsystems.
+ * @dev: Device to resume.
+ */
+int pm_generic_resume_noirq(struct device *dev)
+{
+	return __pm_generic_resume(dev, PM_EVENT_RESUME, true);
+}
+EXPORT_SYMBOL_GPL(pm_generic_resume_noirq);
 
 /**
  * pm_generic_resume_noirq - Generic resume_noirq callback for subsystems.
