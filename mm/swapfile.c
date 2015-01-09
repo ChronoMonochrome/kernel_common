@@ -2164,6 +2164,7 @@ out:
 		kunmap(page);
 		page_cache_release(page);
 	}
+
 	if (name)
 		putname(name);
 	if (inode && S_ISREG(inode->i_mode))
