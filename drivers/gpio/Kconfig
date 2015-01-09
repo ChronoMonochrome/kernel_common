@@ -302,6 +302,13 @@ config GPIO_TPS65912
 	help
 	  This driver supports TPS65912 gpio chip
 
+config GPIO_TC35892
+	bool "TC35892 GPIOs"
+	depends on MFD_TC35892
+	help
+	  This enables support for the GPIOs found on the TC35892
+	  I/O Expander.
+
 config GPIO_TWL4030
 	tristate "TWL4030, TWL5030, and TPS659x0 GPIOs"
 	depends on TWL4030_CORE
@@ -477,7 +484,7 @@ config GPIO_JANZ_TTL
 
 config GPIO_AB8500
 	bool "ST-Ericsson AB8500 Mixed Signal Circuit gpio functions"
-	depends on AB8500_CORE && BROKEN
+	depends on AB8500_CORE
 	help
 	  Select this to enable the AB8500 IC GPIO driver
 
