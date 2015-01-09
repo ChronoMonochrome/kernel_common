@@ -37,6 +37,7 @@
 #include <linux/init.h>
 #include <linux/poll.h>
 #include <linux/fs.h>
+#include <trace/stm.h>
 
 #include "trace.h"
 #include "trace_output.h"
@@ -118,7 +119,7 @@ cpumask_var_t __read_mostly	tracing_buffer_mask;
 
 enum ftrace_dump_mode ftrace_dump_on_oops;
 
-static int tracing_set_tracer(const char *buf);
+int tracing_set_tracer(const char *buf);
 
 #define MAX_TRACER_SIZE		100
 static char bootup_tracer_buf[MAX_TRACER_SIZE] __initdata;
@@ -235,7 +236,7 @@ int tracing_is_enabled(void)
  * to not have to wait for all that output. Anyway this can be
  * boot time and run time configurable.
  */
-#define TRACE_BUF_SIZE_DEFAULT	1441792UL /* 16384 * 88 (sizeof(entry)) */
+#define TRACE_BUF_SIZE_DEFAULT	2097128UL /* 23831 * 88 (sizeof(entry)) */
 
 static unsigned long		trace_buf_size = TRACE_BUF_SIZE_DEFAULT;
 
@@ -343,26 +344,27 @@ unsigned long trace_flags = TRACE_ITER_PRINT_PARENT | TRACE_ITER_PRINTK |
 static int trace_stop_count;
 static DEFINE_SPINLOCK(tracing_start_lock);
 
+static void wakeup_work_handler(struct work_struct *work)
+{
+	wake_up(&trace_wait);
+}
+
+static DECLARE_DELAYED_WORK(wakeup_work, wakeup_work_handler);
+
 /**
  * trace_wake_up - wake up tasks waiting for trace input
  *
- * Simply wakes up any task that is blocked on the trace_wait
- * queue. These is used with trace_poll for tasks polling the trace.
+ * Schedules a delayed work to wake up any task that is blocked on the
+ * trace_wait queue. These is used with trace_poll for tasks polling the
+ * trace.
  */
 void trace_wake_up(void)
 {
-	int cpu;
+	const unsigned long delay = msecs_to_jiffies(2);
 
 	if (trace_flags & TRACE_ITER_BLOCK)
 		return;
-	/*
-	 * The runqueue_is_locked() can fail, but this is the best we
-	 * have for now:
-	 */
-	cpu = get_cpu();
-	if (!runqueue_is_locked(cpu))
-		wake_up(&trace_wait);
-	put_cpu();
+	schedule_delayed_work(&wakeup_work, delay);
 }
 
 static int __init set_buf_size(char *str)
@@ -424,6 +426,7 @@ static const char *trace_options[] = {
 	"graph-time",
 	"record-cmd",
 	"overwrite",
+	"disable_on_free",
 	NULL
 };
 
@@ -906,7 +909,7 @@ void tracing_reset_current_online_cpus(void)
 	tracing_reset_online_cpus(&global_trace);
 }
 
-#define SAVED_CMDLINES 128
+#define SAVED_CMDLINES 2048
 #define NO_CMDLINE_MAP UINT_MAX
 static unsigned map_pid_to_cmdline[PID_MAX_DEFAULT+1];
 static unsigned map_cmdline_to_pid[SAVED_CMDLINES];
@@ -1191,6 +1194,18 @@ void trace_nowake_buffer_unlock_commit(struct ring_buffer *buffer,
 }
 EXPORT_SYMBOL_GPL(trace_nowake_buffer_unlock_commit);
 
+void trace_nowake_buffer_unlock_commit_regs(struct ring_buffer *buffer,
+					    struct ring_buffer_event *event,
+					    unsigned long flags, int pc,
+					    struct pt_regs *regs)
+{
+	ring_buffer_unlock_commit(buffer, event);
+
+	ftrace_trace_stack_regs(buffer, flags, 0, pc, regs);
+	ftrace_trace_userstack(buffer, flags, pc);
+}
+EXPORT_SYMBOL_GPL(trace_nowake_buffer_unlock_commit_regs);
+
 void trace_current_buffer_discard_commit(struct ring_buffer *buffer,
 					 struct ring_buffer_event *event)
 {
@@ -1222,6 +1237,8 @@ trace_function(struct trace_array *tr,
 
 	if (!filter_check_discard(call, entry, buffer, event))
 		ring_buffer_unlock_commit(buffer, event);
+
+	stm_ftrace(ip, parent_ip);
 }
 
 void
@@ -1234,30 +1251,105 @@ ftrace(struct trace_array *tr, struct trace_array_cpu *data,
 }
 
 #ifdef CONFIG_STACKTRACE
+
+#define FTRACE_STACK_MAX_ENTRIES (PAGE_SIZE / sizeof(unsigned long))
+struct ftrace_stack {
+	unsigned long		calls[FTRACE_STACK_MAX_ENTRIES];
+};
+
+static DEFINE_PER_CPU(struct ftrace_stack, ftrace_stack);
+static DEFINE_PER_CPU(int, ftrace_stack_reserve);
+
 static void __ftrace_trace_stack(struct ring_buffer *buffer,
 				 unsigned long flags,
-				 int skip, int pc)
+				 int skip, int pc, struct pt_regs *regs)
 {
 	struct ftrace_event_call *call = &event_kernel_stack;
 	struct ring_buffer_event *event;
 	struct stack_entry *entry;
 	struct stack_trace trace;
-
-	event = trace_buffer_lock_reserve(buffer, TRACE_STACK,
-					  sizeof(*entry), flags, pc);
-	if (!event)
-		return;
-	entry	= ring_buffer_event_data(event);
-	memset(&entry->caller, 0, sizeof(entry->caller));
+	int use_stack;
+	int size = FTRACE_STACK_ENTRIES;
 
 	trace.nr_entries	= 0;
-	trace.max_entries	= FTRACE_STACK_ENTRIES;
 	trace.skip		= skip;
-	trace.entries		= entry->caller;
 
-	save_stack_trace(&trace);
+	/*
+	 * Since events can happen in NMIs there's no safe way to
+	 * use the per cpu ftrace_stacks. We reserve it and if an interrupt
+	 * or NMI comes in, it will just have to use the default
+	 * FTRACE_STACK_SIZE.
+	 */
+	preempt_disable_notrace();
+
+	use_stack = ++__get_cpu_var(ftrace_stack_reserve);
+	/*
+	 * We don't need any atomic variables, just a barrier.
+	 * If an interrupt comes in, we don't care, because it would
+	 * have exited and put the counter back to what we want.
+	 * We just need a barrier to keep gcc from moving things
+	 * around.
+	 */
+	barrier();
+	if (use_stack == 1) {
+		trace.entries		= &__get_cpu_var(ftrace_stack).calls[0];
+		trace.max_entries	= FTRACE_STACK_MAX_ENTRIES;
+
+		if (regs)
+			save_stack_trace_regs(regs, &trace);
+		else
+			save_stack_trace(&trace);
+
+		if (trace.nr_entries > size)
+			size = trace.nr_entries;
+	} else
+		/* From now on, use_stack is a boolean */
+		use_stack = 0;
+
+	size *= sizeof(unsigned long);
+
+	event = trace_buffer_lock_reserve(buffer, TRACE_STACK,
+					  sizeof(*entry) + size, flags, pc);
+	if (!event)
+		goto out;
+	entry = ring_buffer_event_data(event);
+
+	memset(&entry->caller, 0, size);
+
+	if (use_stack)
+		memcpy(&entry->caller, trace.entries,
+		       trace.nr_entries * sizeof(unsigned long));
+	else {
+		trace.max_entries	= FTRACE_STACK_ENTRIES;
+		trace.entries		= entry->caller;
+		if (regs)
+			save_stack_trace_regs(regs, &trace);
+		else
+			save_stack_trace(&trace);
+	}
+
+	entry->size = trace.nr_entries;
+
 	if (!filter_check_discard(call, entry, buffer, event))
 		ring_buffer_unlock_commit(buffer, event);
+	
+	save_stack_trace(&trace);
+
+ out:
+	/* Again, don't let gcc optimize things here */
+	barrier();
+	__get_cpu_var(ftrace_stack_reserve)--;
+	preempt_enable_notrace();
+
+}
+
+void ftrace_trace_stack_regs(struct ring_buffer *buffer, unsigned long flags,
+			     int skip, int pc, struct pt_regs *regs)
+{
+	if (!(trace_flags & TRACE_ITER_STACKTRACE))
+		return;
+
+	__ftrace_trace_stack(buffer, flags, skip, pc, regs);
 }
 
 void ftrace_trace_stack(struct ring_buffer *buffer, unsigned long flags,
@@ -1266,13 +1358,13 @@ void ftrace_trace_stack(struct ring_buffer *buffer, unsigned long flags,
 	if (!(trace_flags & TRACE_ITER_STACKTRACE))
 		return;
 
-	__ftrace_trace_stack(buffer, flags, skip, pc);
+	__ftrace_trace_stack(buffer, flags, skip, pc, NULL);
 }
 
 void __trace_stack(struct trace_array *tr, unsigned long flags, int skip,
 		   int pc)
 {
-	__ftrace_trace_stack(tr->buffer, flags, skip, pc);
+	__ftrace_trace_stack(tr->buffer, flags, skip, pc, NULL);
 }
 
 /**
@@ -1288,7 +1380,7 @@ void trace_dump_stack(void)
 	local_save_flags(flags);
 
 	/* skipping 3 traces, seems to get us at the caller of this function */
-	__ftrace_trace_stack(global_trace.buffer, flags, 3, preempt_count());
+	__ftrace_trace_stack(global_trace.buffer, flags, 3, preempt_count(), NULL);
 }
 
 static DEFINE_PER_CPU(int, user_stack_count);
@@ -1413,6 +1505,8 @@ int trace_vbprintk(unsigned long ip, const char *fmt, va_list args)
 		ftrace_trace_stack(buffer, flags, 6, pc);
 	}
 
+	stm_trace_bprintk_buf(ip, fmt, trace_buf, sizeof(u32) * len);
+
 out_unlock:
 	arch_spin_unlock(&trace_buf_lock);
 	local_irq_restore(flags);
@@ -1489,6 +1583,8 @@ int trace_array_vprintk(struct trace_array *tr,
 		ftrace_trace_stack(buffer, irq_flags, 6, pc);
 	}
 
+	stm_trace_printk_buf(ip, trace_buf, len);
+
  out_unlock:
 	arch_spin_unlock(&trace_buf_lock);
 	raw_local_irq_restore(irq_flags);
@@ -1536,7 +1632,12 @@ peek_next_entry(struct trace_iterator *iter, int cpu, u64 *ts,
 
 	ftrace_enable_cpu();
 
-	return event ? ring_buffer_event_data(event) : NULL;
+	if (event) {
+		iter->ent_size = ring_buffer_event_length(event);
+		return ring_buffer_event_data(event);
+	}
+	iter->ent_size = 0;
+	return NULL;
 }
 
 static struct trace_entry *
@@ -2050,6 +2151,9 @@ enum print_line_t print_trace_line(struct trace_iterator *iter)
 void trace_default_header(struct seq_file *m)
 {
 	struct trace_iterator *iter = m->private;
+
+	if (!(trace_flags & TRACE_ITER_CONTEXT_INFO))
+		return;
 
 	if (iter->iter_flags & TRACE_FILE_LAT_FMT) {
 		/* print nothing if the buffers are empty */
@@ -2701,20 +2805,11 @@ tracing_ctrl_write(struct file *filp, const char __user *ubuf,
 		   size_t cnt, loff_t *ppos)
 {
 	struct trace_array *tr = filp->private_data;
-	char buf[64];
 	unsigned long val;
 	int ret;
 
-	if (cnt >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return -EFAULT;
-
-	buf[cnt] = 0;
-
-	ret = strict_strtoul(buf, 10, &val);
-	if (ret < 0)
+	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
+	if (ret)
 		return ret;
 
 	val = !!val;
@@ -2767,7 +2862,7 @@ int tracer_init(struct tracer *t, struct trace_array *tr)
 	return t->init(tr);
 }
 
-static int tracing_resize_ring_buffer(unsigned long size)
+static int __tracing_resize_ring_buffer(unsigned long size)
 {
 	int ret;
 
@@ -2819,6 +2914,41 @@ static int tracing_resize_ring_buffer(unsigned long size)
 	return ret;
 }
 
+static ssize_t tracing_resize_ring_buffer(unsigned long size)
+{
+	int cpu, ret = size;
+
+	mutex_lock(&trace_types_lock);
+
+	tracing_stop();
+
+	/* disable all cpu buffers */
+	for_each_tracing_cpu(cpu) {
+		if (global_trace.data[cpu])
+			atomic_inc(&global_trace.data[cpu]->disabled);
+		if (max_tr.data[cpu])
+			atomic_inc(&max_tr.data[cpu]->disabled);
+	}
+
+	if (size != global_trace.entries)
+		ret = __tracing_resize_ring_buffer(size);
+
+	if (ret < 0)
+		ret = -ENOMEM;
+
+	for_each_tracing_cpu(cpu) {
+		if (global_trace.data[cpu])
+			atomic_dec(&global_trace.data[cpu]->disabled);
+		if (max_tr.data[cpu])
+			atomic_dec(&max_tr.data[cpu]->disabled);
+	}
+
+	tracing_start();
+	mutex_unlock(&trace_types_lock);
+
+	return ret;
+}
+
 
 /**
  * tracing_update_buffers - used by tracing facility to expand ring buffers
@@ -2836,7 +2966,7 @@ int tracing_update_buffers(void)
 
 	mutex_lock(&trace_types_lock);
 	if (!ring_buffer_expanded)
-		ret = tracing_resize_ring_buffer(trace_buf_size);
+		ret = __tracing_resize_ring_buffer(trace_buf_size);
 	mutex_unlock(&trace_types_lock);
 
 	return ret;
@@ -2850,7 +2980,7 @@ create_trace_option_files(struct tracer *tracer);
 static void
 destroy_trace_option_files(struct trace_option_dentry *topts);
 
-static int tracing_set_tracer(const char *buf)
+int tracing_set_tracer(const char *buf)
 {
 	static struct trace_option_dentry *topts;
 	struct trace_array *tr = &global_trace;
@@ -2860,7 +2990,7 @@ static int tracing_set_tracer(const char *buf)
 	mutex_lock(&trace_types_lock);
 
 	if (!ring_buffer_expanded) {
-		ret = tracing_resize_ring_buffer(trace_buf_size);
+		ret = __tracing_resize_ring_buffer(trace_buf_size);
 		if (ret < 0)
 			goto out;
 		ret = 0;
@@ -2966,20 +3096,11 @@ tracing_max_lat_write(struct file *filp, const char __user *ubuf,
 		      size_t cnt, loff_t *ppos)
 {
 	unsigned long *ptr = filp->private_data;
-	char buf[64];
 	unsigned long val;
 	int ret;
 
-	if (cnt >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return -EFAULT;
-
-	buf[cnt] = 0;
-
-	ret = strict_strtoul(buf, 10, &val);
-	if (ret < 0)
+	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
+	if (ret)
 		return ret;
 
 	*ptr = val * 1000;
@@ -3434,65 +3555,52 @@ tracing_entries_write(struct file *filp, const char __user *ubuf,
 		      size_t cnt, loff_t *ppos)
 {
 	unsigned long val;
-	char buf[64];
-	int ret, cpu;
+	int ret;
 
-	if (cnt >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return -EFAULT;
-
-	buf[cnt] = 0;
-
-	ret = strict_strtoul(buf, 10, &val);
-	if (ret < 0)
+	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
+	if (ret)
 		return ret;
 
 	/* must have at least 1 entry */
 	if (!val)
 		return -EINVAL;
 
-	mutex_lock(&trace_types_lock);
-
-	tracing_stop();
-
-	/* disable all cpu buffers */
-	for_each_tracing_cpu(cpu) {
-		if (global_trace.data[cpu])
-			atomic_inc(&global_trace.data[cpu]->disabled);
-		if (max_tr.data[cpu])
-			atomic_inc(&max_tr.data[cpu]->disabled);
-	}
-
 	/* value is in KB */
 	val <<= 10;
 
-	if (val != global_trace.entries) {
-		ret = tracing_resize_ring_buffer(val);
-		if (ret < 0) {
-			cnt = ret;
-			goto out;
-		}
-	}
+	ret = tracing_resize_ring_buffer(val);
+	if (ret < 0)
+		return ret;
 
 	*ppos += cnt;
 
-	/* If check pages failed, return ENOMEM */
-	if (tracing_disabled)
-		cnt = -ENOMEM;
- out:
-	for_each_tracing_cpu(cpu) {
-		if (global_trace.data[cpu])
-			atomic_dec(&global_trace.data[cpu]->disabled);
-		if (max_tr.data[cpu])
-			atomic_dec(&max_tr.data[cpu]->disabled);
-	}
+	return cnt;
+}
 
-	tracing_start();
-	mutex_unlock(&trace_types_lock);
+static ssize_t
+tracing_free_buffer_write(struct file *filp, const char __user *ubuf,
+			  size_t cnt, loff_t *ppos)
+{
+	/*
+	 * There is no need to read what the user has written, this function
+	 * is just to make sure that there is no error when "echo" is used
+	 */
+
+	*ppos += cnt;
 
 	return cnt;
+}
+
+static int
+tracing_free_buffer_release(struct inode *inode, struct file *filp)
+{
+	/* disable tracing ? */
+	if (trace_flags & TRACE_ITER_STOP_ON_FREE)
+		tracing_off();
+	/* resize the ring buffer to 0 */
+	tracing_resize_ring_buffer(0);
+
+	return 0;
 }
 
 static int mark_printk(const char *fmt, ...)
@@ -3640,6 +3748,11 @@ static const struct file_operations tracing_entries_fops = {
 	.llseek		= generic_file_llseek,
 };
 
+static const struct file_operations tracing_free_buffer_fops = {
+	.write		= tracing_free_buffer_write,
+	.release	= tracing_free_buffer_release,
+};
+
 static const struct file_operations tracing_mark_fops = {
 	.open		= tracing_open_generic,
 	.write		= tracing_mark_write,
@@ -3696,7 +3809,7 @@ tracing_buffers_read(struct file *filp, char __user *ubuf,
 		return 0;
 
 	if (!info->spare)
-		info->spare = ring_buffer_alloc_read_page(info->tr->buffer);
+		info->spare = ring_buffer_alloc_read_page(info->tr->buffer, info->cpu);
 	if (!info->spare)
 		return -ENOMEM;
 
@@ -3853,7 +3966,7 @@ tracing_buffers_splice_read(struct file *file, loff_t *ppos,
 
 		ref->ref = 1;
 		ref->buffer = info->tr->buffer;
-		ref->page = ring_buffer_alloc_read_page(ref->buffer);
+		ref->page = ring_buffer_alloc_read_page(ref->buffer, info->cpu);
 		if (!ref->page) {
 			kfree(ref);
 			break;
@@ -3862,8 +3975,7 @@ tracing_buffers_splice_read(struct file *file, loff_t *ppos,
 		r = ring_buffer_read_page(ref->buffer, &ref->page,
 					  len, info->cpu, 1);
 		if (r < 0) {
-			ring_buffer_free_read_page(ref->buffer,
-						   ref->page);
+			ring_buffer_free_read_page(ref->buffer, ref->page);
 			kfree(ref);
 			break;
 		}
@@ -4099,19 +4211,10 @@ trace_options_write(struct file *filp, const char __user *ubuf, size_t cnt,
 {
 	struct trace_option_dentry *topt = filp->private_data;
 	unsigned long val;
-	char buf[64];
 	int ret;
 
-	if (cnt >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return -EFAULT;
-
-	buf[cnt] = 0;
-
-	ret = strict_strtoul(buf, 10, &val);
-	if (ret < 0)
+	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
+	if (ret)
 		return ret;
 
 	if (val != 0 && val != 1)
@@ -4159,20 +4262,11 @@ trace_options_core_write(struct file *filp, const char __user *ubuf, size_t cnt,
 			 loff_t *ppos)
 {
 	long index = (long)filp->private_data;
-	char buf[64];
 	unsigned long val;
 	int ret;
 
-	if (cnt >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return -EFAULT;
-
-	buf[cnt] = 0;
-
-	ret = strict_strtoul(buf, 10, &val);
-	if (ret < 0)
+	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
+	if (ret)
 		return ret;
 
 	if (val != 0 && val != 1)
@@ -4364,6 +4458,9 @@ static __init int tracer_init_debugfs(void)
 
 	trace_create_file("buffer_size_kb", 0644, d_tracer,
 			&global_trace, &tracing_entries_fops);
+
+	trace_create_file("free_buffer", 0644, d_tracer,
+			&global_trace, &tracing_free_buffer_fops);
 
 	trace_create_file("trace_marker", 0220, d_tracer,
 			NULL, &tracing_mark_fops);
