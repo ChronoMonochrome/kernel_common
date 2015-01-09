@@ -270,30 +270,14 @@ static int tegra_i2c_fill_tx_fifo(struct tegra_i2c_dev *i2c_dev)
 
 	/* Rounds down to not include partial word at the end of buf */
 	words_to_transfer = buf_remaining / BYTES_PER_FIFO_WORD;
+	if (words_to_transfer > tx_fifo_avail)
+		words_to_transfer = tx_fifo_avail;
 
-	/* It's very common to have < 4 bytes, so optimize that case. */
-	if (words_to_transfer) {
-		if (words_to_transfer > tx_fifo_avail)
-			words_to_transfer = tx_fifo_avail;
+	i2c_writesl(i2c_dev, buf, I2C_TX_FIFO, words_to_transfer);
 
-		/*
-		 * Update state before writing to FIFO.  If this casues us
-		 * to finish writing all bytes (AKA buf_remaining goes to 0) we
-		 * have a potential for an interrupt (PACKET_XFER_COMPLETE is
-		 * not maskable).  We need to make sure that the isr sees
-		 * buf_remaining as 0 and doesn't call us back re-entrantly.
-		 */
-		buf_remaining -= words_to_transfer * BYTES_PER_FIFO_WORD;
-		tx_fifo_avail -= words_to_transfer;
-		i2c_dev->msg_buf_remaining = buf_remaining;
-		i2c_dev->msg_buf = buf +
-			words_to_transfer * BYTES_PER_FIFO_WORD;
-		barrier();
-
-		i2c_writesl(i2c_dev, buf, I2C_TX_FIFO, words_to_transfer);
-
-		buf += words_to_transfer * BYTES_PER_FIFO_WORD;
-	}
+	buf += words_to_transfer * BYTES_PER_FIFO_WORD;
+	buf_remaining -= words_to_transfer * BYTES_PER_FIFO_WORD;
+	tx_fifo_avail -= words_to_transfer;
 
 	/*
 	 * If there is a partial word at the end of buf, handle it manually to
@@ -303,15 +287,14 @@ static int tegra_i2c_fill_tx_fifo(struct tegra_i2c_dev *i2c_dev)
 	if (tx_fifo_avail > 0 && buf_remaining > 0) {
 		BUG_ON(buf_remaining > 3);
 		memcpy(&val, buf, buf_remaining);
-
-		/* Again update before writing to FIFO to make sure isr sees. */
-		i2c_dev->msg_buf_remaining = 0;
-		i2c_dev->msg_buf = NULL;
-		barrier();
-
 		i2c_writel(i2c_dev, val, I2C_TX_FIFO);
+		buf_remaining = 0;
+		tx_fifo_avail--;
 	}
 
+	BUG_ON(tx_fifo_avail > 0 && buf_remaining > 0);
+	i2c_dev->msg_buf_remaining = buf_remaining;
+	i2c_dev->msg_buf = buf;
 	return 0;
 }
 
@@ -428,10 +411,9 @@ static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 			tegra_i2c_mask_irq(i2c_dev, I2C_INT_TX_FIFO_DATA_REQ);
 	}
 
-	if (status & I2C_INT_PACKET_XFER_COMPLETE) {
-		BUG_ON(i2c_dev->msg_buf_remaining);
+	if ((status & I2C_INT_PACKET_XFER_COMPLETE) &&
+			!i2c_dev->msg_buf_remaining)
 		complete(&i2c_dev->msg_complete);
-	}
 
 	i2c_writel(i2c_dev, status, I2C_INT_STATUS);
 	if (i2c_dev->is_dvc)
@@ -549,7 +531,7 @@ static int tegra_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 
 static u32 tegra_i2c_func(struct i2c_adapter *adap)
 {
-	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
+	return I2C_FUNC_I2C;
 }
 
 static const struct i2c_algorithm tegra_i2c_algo = {
@@ -627,10 +609,10 @@ static int tegra_i2c_probe(struct platform_device *pdev)
 	i2c_dev->bus_clk_rate = 100000; /* default clock rate */
 	if (pdata) {
 		i2c_dev->bus_clk_rate = pdata->bus_clk_rate;
-
-	} else if (i2c_dev->dev->of_node) {    /* if there is a device tree node ... */
+	} else if (i2c_dev->dev->of_node) {
+		/* if there is a device tree node ... */
 		prop = of_get_property(i2c_dev->dev->of_node,
-				"clock-frequency", NULL);
+					"clock-frequency", NULL);
 		if (prop)
 			i2c_dev->bus_clk_rate = be32_to_cpup(prop);
 	}
