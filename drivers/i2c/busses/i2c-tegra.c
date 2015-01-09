@@ -609,10 +609,10 @@ static int tegra_i2c_probe(struct platform_device *pdev)
 	i2c_dev->bus_clk_rate = 100000; /* default clock rate */
 	if (pdata) {
 		i2c_dev->bus_clk_rate = pdata->bus_clk_rate;
-
-	} else if (i2c_dev->dev->of_node) {    /* if there is a device tree node ... */
+	} else if (i2c_dev->dev->of_node) {
+		/* if there is a device tree node ... */
 		prop = of_get_property(i2c_dev->dev->of_node,
-				"clock-frequency", NULL);
+					"clock-frequency", NULL);
 		if (prop)
 			i2c_dev->bus_clk_rate = be32_to_cpup(prop);
 	}
