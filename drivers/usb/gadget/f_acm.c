@@ -538,6 +538,22 @@ static void acm_cdc_notify_complete(struct usb_ep *ep, struct usb_request *req)
 
 /* connect == the TTY link is open */
 
+#ifdef CONFIG_USB_DUN_SUPPORT
+int acm_notify(void *dev, u16 state)
+{
+	struct f_acm	*acm;
+	if (dev) {
+		acm = (struct f_acm *)dev;
+		acm->serial_state = state;
+		acm_notify_serial_state(acm);
+	} else {
+		printk(KERN_DEBUG "usb: %s not ready\n", __func__);
+		return -EAGAIN;
+	}
+	return 0;
+}
+#endif
+
 static void acm_connect(struct gserial *port)
 {
 	struct f_acm		*acm = port_to_acm(port);
