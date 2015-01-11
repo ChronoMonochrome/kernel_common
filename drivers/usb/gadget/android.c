@@ -783,70 +783,9 @@ static DEVICE_ATTR(inquiry_string, S_IRUGO | S_IWUSR,
 					mass_storage_inquiry_show,
 					mass_storage_inquiry_store);
 
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-static ssize_t mass_storage_vendor_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct android_usb_function *f = dev_get_drvdata(dev);
-	struct mass_storage_function_config *config = f->config;
-	return sprintf(buf, "%s\n", config->common->vendor_string);
-}
-
-static ssize_t mass_storage_vendor_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct android_usb_function *f = dev_get_drvdata(dev);
-	struct mass_storage_function_config *config = f->config;
-
-	if (size >= sizeof(config->common->vendor_string))
-		return -EINVAL;
-	if (sscanf(buf, "%s", config->common->vendor_string) != 1)
-		return -EINVAL;
-
-	printk(KERN_DEBUG "usb: %s: vendor %s", __func__,
-			config->common->vendor_string);
-	return size;
-}
-
-static DEVICE_ATTR(vendor_string, S_IRUGO | S_IWUSR,
-			mass_storage_vendor_show,
-			mass_storage_vendor_store);
-
-static ssize_t mass_storage_product_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct android_usb_function *f = dev_get_drvdata(dev);
-	struct mass_storage_function_config *config = f->config;
-	return sprintf(buf, "%s\n", config->common->product_string);
-}
-
-static ssize_t mass_storage_product_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct android_usb_function *f = dev_get_drvdata(dev);
-	struct mass_storage_function_config *config = f->config;
-
-	if (size >= sizeof(config->common->product_string))
-		return -EINVAL;
-	if (sscanf(buf, "%s", config->common->product_string) != 1)
-		return -EINVAL;
-
-	printk(KERN_DEBUG "usb: %s: product %s", __func__,
-			config->common->product_string);
-	return size;
-}
-
-static DEVICE_ATTR(product_string, S_IRUGO | S_IWUSR,
-			mass_storage_product_show,
-			mass_storage_product_store);
-#endif
 
 static struct device_attribute *mass_storage_function_attributes[] = {
 	&dev_attr_inquiry_string,
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-	&dev_attr_vendor_string,
-	&dev_attr_product_string,
-#endif
 	NULL
 };
 
