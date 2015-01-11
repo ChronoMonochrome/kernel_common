@@ -113,7 +113,7 @@ config RTC_INTF_ALARM
 	help
 	  Provides non-wakeup and rtc backed wakeup alarms based on rtc or
 	  elapsed realtime, and a non-wakeup alarm on the monotonic clock.
-	  Also provides an ioctl to set the wall time which must be used
+	  Also provides an interface to set the wall time which must be used
 	  for elapsed realtime to work.
 
 config RTC_INTF_ALARM_DEV
