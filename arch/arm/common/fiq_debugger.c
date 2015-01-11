@@ -22,6 +22,7 @@
 #include <linux/interrupt.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
+#include <linux/kernel_debugger.h>
 #include <linux/kernel_stat.h>
 #include <linux/irq.h>
 #include <linux/delay.h>
@@ -568,6 +569,13 @@ static void debug_help(struct fiq_debugger_state *state)
 	debug_printf(state,	" ps            Process list\n"
 				" sysrq         sysrq options\n"
 				" sysrq <param> Execute sysrq with <param>\n");
+	if (!state->debug_busy) {
+		strcpy(state->debug_cmd, "help");
+		state->debug_busy = 1;
+		return true;
+	}
+
+	return false;
 }
 
 static void take_affinity(void *info)
