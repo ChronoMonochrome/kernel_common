@@ -2086,17 +2086,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	memcpy(netdev_priv(net), &dhd, sizeof(dhd));
 	dhd->pub.osh = osh;
 
-	mutex_init(&dhd->proto_sem);
-	mutex_init(&dhd->sdsem);
-	/* Initialize other structure content */
-	init_waitqueue_head(&dhd->ioctl_resp_wait);
-	init_waitqueue_head(&dhd->ctrl_wait);
-
-	/* Initialize the spinlocks */
-	spin_lock_init(&dhd->sdlock);
-	spin_lock_init(&dhd->txqlock);
-	spin_lock_init(&dhd->dhd_lock);
-
 	/* Set network interface name if it was provided as module parameter */
 	if (iface_name[0]) {
 		int len;
