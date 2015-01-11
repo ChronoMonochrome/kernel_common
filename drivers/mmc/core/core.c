@@ -2217,7 +2217,7 @@ void mmc_rescan(struct work_struct *work)
 			mmc_release_host(host);
 			return;
 		}
-		if (!mmc_rescan_try_freq(host, max(freqs[i], host->f_min)))
+		if (!mmc_rescan_try_freq(host, max(freqs[i], host->f_min))) {
 			break;
 		}
 		if (freqs[i] <= host->f_min)
@@ -2494,7 +2494,6 @@ int mmc_suspend_host(struct mmc_host *host)
 			host->pm_state |= MMC_HOST_DEFERRED_RESUME |
 					  MMC_HOST_NEEDS_RESUME;
 		}
-		flush_delayed_work(&host->disable);
 	}
 	mmc_bus_put(host);
 
