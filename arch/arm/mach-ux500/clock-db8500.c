@@ -165,7 +165,7 @@ static struct clkops ab8500_sysclk_ops = {
 
 static int ab_ulpclk_enable(struct clk *clk)
 {
-#if defined(CONFIG_MACH_SEC_SKOMER) || defined(CONFIG_MACH_CODINA)
+#if defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE)
 	/*
 	 * Request AB ULP PLL so that prcmu firmware can not disable it in deep sleep
 	 * 0002-u8500-clock-Request-AB-ULP-PLL-for-FM-radio.patch
@@ -222,7 +222,7 @@ regulator_enable_error:
 
 static void ab_ulpclk_disable(struct clk *clk)
 {
-#if defined(CONFIG_MACH_SEC_SKOMER) || defined(CONFIG_MACH_CODINA)
+#if defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE)
 	int err;
 	err = ab8500_sysctrl_clear(AB8500_SYSULPCLKCTRL1,
 		AB8500_SYSULPCLKCTRL1_ULPCLKREQ);	
@@ -936,6 +936,12 @@ static struct clk ddr_pll = {
 	.cg_sel = PRCMU_PLLDDR,
 };
 
+static struct clk arm_pll = {
+	.name = "arm_pll",
+	.ops = &pll_ops,
+	.cg_sel = PRCMU_PLLARM,
+};
+
 static struct clk ulp38m4 = {
 	.name = "ulp38m4",
 	.rate = 38400000,
@@ -1456,6 +1462,7 @@ static struct clk_lookup common_clocks[] = {
 	CLK_LOOKUP(soc0_pll, NULL, "soc0_pll"),
 	CLK_LOOKUP(soc1_pll, NULL, "soc1_pll"),
 	CLK_LOOKUP(ddr_pll, NULL, "ddr_pll"),
+	CLK_LOOKUP(arm_pll, NULL, "arm_pll"),
 	CLK_LOOKUP(ulp38m4, NULL, "ulp38m4"),
 	CLK_LOOKUP(rtc32k, NULL, "clk32k"),
 	CLK_LOOKUP(rtc32k, "rtc-pl031", NULL),
@@ -1733,6 +1740,7 @@ static struct clk *db8500_dbg_clks[] __initdata = {
 	&soc0_pll,
 	&soc1_pll,
 	&ddr_pll,
+	&arm_pll,
 	&ulp38m4,
 	&ab8500_sysclk,
 	&rtc32k,

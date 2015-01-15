@@ -13,10 +13,10 @@
 #if defined(CONFIG_MACH_SEC_KYLE)
 
 /* B1 mode */
-/*
 #define PROX_NONDETECT		0x40
 #define PROX_DETECT		0x20
-*/
+
+#elif	defined(CONFIG_MACH_SEC_SKOMER) 
 /* B1.5 mode */
 #define PROX_NONDETECT		0x2f
 #define PROX_DETECT		0x0f

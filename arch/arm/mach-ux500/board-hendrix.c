@@ -117,7 +117,7 @@
 #define SSG_CAMERA_ENABLE
 #endif
 
-#include <linux/input/mms134s_ts.h>
+#include <linux/input/mms1xx_ts.h>
 
 unsigned int board_id;
 

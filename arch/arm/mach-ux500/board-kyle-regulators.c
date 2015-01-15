@@ -141,7 +141,7 @@ static struct ab8500_regulator_reg_init
 	 * Vintcore12LP             = inactive (HP)
 	 * VTVoutLP                 = inactive (HP)
 	 */
-	INIT_REGULATOR_REGISTER(AB8505_REGUMISC1,		0xfe, 0x10),
+	INIT_REGULATOR_REGISTER(AB8505_REGUMISC1,		0xfe, 0x14),
 	/*
 	 * VaudioEna                = disabled
 	 * Vaux8Ena                 = disabled
@@ -428,14 +428,18 @@ static struct ab8500_regulator_reg_init
 	 * VsmpsAAutoMode
 	 * VsmpsAPWMMode
 	 */
-	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,		0x00, 0x00),
+#if 0
+	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x06),
+#else
+	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x05),
+#endif
 	/*
 	 * VsmpsBRegu
 	 * VsmpsBSelCtrl
 	 * VsmpsBAutoMode
 	 * VsmpsBPWMMode
 	 */
-	INIT_REGULATOR_REGISTER(AB8505_VSMPSBREGU,		0x00, 0x00),
+	INIT_REGULATOR_REGISTER(AB8505_VSMPSBREGU,		0x0f, 0x06),
 	/*
 	 * VsafeRegu
 	 * VsafeSelCtrl
@@ -793,6 +797,7 @@ struct regulator_init_data kyle_r0_0_regulators[AB8505_NUM_REGULATORS] = {
 			.min_uV = 1250000,
 			.max_uV = 1350000,
 			.input_uV = 1800000,
+			.always_on = 1,
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE |
 					  REGULATOR_CHANGE_STATUS |
 					  REGULATOR_CHANGE_MODE |

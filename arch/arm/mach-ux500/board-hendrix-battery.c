@@ -298,9 +298,26 @@ static sec_bat_adc_region_t cable_adc_value_table[] = {
 static sec_charging_current_t charging_current_table[] = {
 	{0,	0,	0,	0},
 	{0,	0,	0,	0},
-	{900,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_MAINS */
+	{0,	0,	0,	0},
+	{700,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_MAINS */
 	{500,	500,	185,	145}, /* POWER_SUPPLY_TYPE_USB */
-	{900,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_DCP */
+	{700,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_DCP */
+	{500,	500,	185,	145}, /* POWER_SUPPLY_TYPE_CDP */
+	{500,	500,	185,	145},   /* POWER_SUPPLY_TYPE_ACA */
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+};
+
+static sec_charging_current_t charging_current_recharging_table[] = {
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{700,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_MAINS */
+	{500,	500,	185,	145}, /* POWER_SUPPLY_TYPE_USB */
+	{700,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_DCP */
 	{500,	500,	185,	145}, /* POWER_SUPPLY_TYPE_CDP */
 	{500,	500,	185,	145},   /* POWER_SUPPLY_TYPE_ACA */
 	{0,	0,	0,	0},
@@ -459,8 +476,8 @@ static const struct fg_parameters fg = {
 	.accu_high_curr = 20,
 	.high_curr_threshold = 50,
 	.lowbat_threshold = 3300,
-	.battok_falling_th_sel0 = 2860,
-	.battok_raising_th_sel1 = 2860,
+	.battok_raising_th_sel0 = 2860,
+	.battok_falling_th_sel1 = 2710,
 	.user_cap_limit = 15,
 	.maint_thres = 97,
 #ifdef CONFIG_AB8505_SMPL
@@ -564,6 +581,7 @@ sec_battery_platform_data_t sec_battery_pdata = {
 		},
 	.cable_adc_value = cable_adc_value_table,
 	.charging_current = charging_current_table,
+	.charging_current_recharging = charging_current_recharging_table,
 	.polling_time = polling_time_table,
 	/* NO NEED TO BE CHANGED */
 
@@ -636,10 +654,10 @@ sec_battery_platform_data_t sec_battery_pdata = {
 	.temp_low_threshold_lpm = -50,
 	.temp_low_recovery_lpm = 0,
 
-	.full_check_type = SEC_BATTERY_FULLCHARGED_ADC_DUAL,
+	.full_check_type = SEC_BATTERY_FULLCHARGED_ADC,
+	.full_check_type_2nd = SEC_BATTERY_FULLCHARGED_ADC,
+	.full_check_type_recharge = SEC_BATTERY_FULLCHARGED_ADC,
 	.full_check_count = 3,
-	.full_check_adc_1st = 185,
-	.full_check_adc_2nd = 145,
 	.chg_gpio_full_check = 0,
 	.chg_polarity_full_check = 1,
 	.full_condition_type =
@@ -647,12 +665,12 @@ sec_battery_platform_data_t sec_battery_pdata = {
 		SEC_BATTERY_FULL_CONDITION_VCELL |
 		SEC_BATTERY_FULL_CONDITION_NOTIMEFULL,
 	.full_condition_soc = 95,
-	.full_condition_vcell = 4320,
+	.full_condition_vcell = 4180,
 
 	.recharge_condition_type =
 		SEC_BATTERY_RECHARGE_CONDITION_VCELL,
 	.recharge_condition_soc = 98,
-	.recharge_condition_vcell = 4300,
+	.recharge_condition_vcell = 4130,
 
 	.charging_total_time = 6 * 60 * 60,
 	.recharging_total_time = 90 * 60,
@@ -678,7 +696,7 @@ sec_battery_platform_data_t sec_battery_pdata = {
 	.chg_polarity_status = 0,
 	.chg_irq = 0,
 	.chg_irq_attr = 0,
-	.chg_float_voltage = 4350,
+	.chg_float_voltage = 4200,
 
 };
 
@@ -714,9 +732,10 @@ static int muic_accessory_notify(struct notifier_block *self,
 		break;
 	case LEGACY_CHARGER_PLUGGED:
 	case ATNT_CHARGER_PLUGGED:
+	case PLEOMAX_CHARGER_PLUGGED:
 		abb_charger_cb(true);
 		break;
-		
+
 	case CARKIT_TYPE1_PLUGGED:
 	case CARKIT_TYPE2_PLUGGED:
 	case DESKTOP_DOCK_PLUGGED:
@@ -731,6 +750,7 @@ static int muic_accessory_notify(struct notifier_block *self,
 	case CARKIT_TYPE2_UNPLUGGED:
 	case DESKTOP_DOCK_UNPLUGGED:
 	case ATNT_CHARGER_UNPLUGGED:
+	case PLEOMAX_CHARGER_UNPLUGGED:
 		abb_battery_cb();
 
 		break;

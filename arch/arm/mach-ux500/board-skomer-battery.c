@@ -24,7 +24,7 @@ struct notifier_block cable_nb;
 struct notifier_block cable_accessory_nb;
 extern int micro_usb_register_notifier(struct notifier_block *nb);
 extern int micro_usb_register_usb_notifier(struct notifier_block *nb);
-extern void usb_switch_register_notify(struct notifier_block *nb);
+//extern void usb_switch_register_notify(struct notifier_block *nb);
 extern unsigned int board_id;
 extern int use_ab8505_iddet;
 bool vbus_state;
@@ -205,7 +205,10 @@ static void sec_bat_initial_check(void)
 		value.intval = POWER_SUPPLY_TYPE_USB;
 		break;
 	case CABLE_TYPE_CARDOCK:
-		value.intval = POWER_SUPPLY_TYPE_CARDOCK;
+		if(vbus_state)
+			value.intval = POWER_SUPPLY_TYPE_MAINS;
+		else
+			value.intval = POWER_SUPPLY_TYPE_CARDOCK;
 		break;
 	case CABLE_TYPE_NONE:
 		value.intval = POWER_SUPPLY_TYPE_BATTERY;
@@ -311,6 +314,22 @@ static sec_charging_current_t charging_current_table[] = {
 	{0,	0,	0,	0},
 };
 
+static sec_charging_current_t charging_current_recharging_table[] = {
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{1000,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_MAINS */
+	{500,	500,	185,	145}, /* POWER_SUPPLY_TYPE_USB */
+	{1000,	1500,	185,	145}, /* POWER_SUPPLY_TYPE_DCP */
+	{500,	500,	185,	145}, /* POWER_SUPPLY_TYPE_CDP */
+	{500,	500,	185,	145},   /* POWER_SUPPLY_TYPE_ACA */
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+	{0,	0,	0,	0},
+};
+
 static int polling_time_table[] = {
 	10,	/* BASIC */
 	10,	/* CHARGING */
@@ -349,8 +368,8 @@ static struct v_to_cap cap_tbl[] = {
 };
 
 static struct v_to_cap cap_tbl_5ma[] = {
-	{4349, 100},
-	{4331, 99},
+    {4330,  100},
+    {4320,	99}, 
 	{4283, 95},
 	{4246, 92},
 	{4211, 89},
@@ -401,34 +420,30 @@ static struct v_to_cap cap_tbl_5ma[] = {
 
 /* Battery voltage to Resistance table*/
 static struct v_to_res res_tbl[] = {
-	{4240,	160},
-	{4210,	179},
-	{4180,	183},
-	{4160,	184},
-	{4140,	191},
-	{4120,	204},
-	{4080,	200},
-	{4027,	202},
-	{3916,	221},
-	{3842,	259},
-	{3800,	262},
-	{3715,	340},
-	{3700,	300},
-	{3668,	258},
-	{3660,	247},
-	{3636,	293},
-	{3616,	331},
-	{3600,	349},
-	{3593,	345},
-	{3585,	344},
-	{3572,	336},
-	{3553,	321},
-	{3517,	336},
-	{3503,	322},
-	{3400,	269},
-	{3360,	328},
-	{3330,	305},
-	{3300,	339},
+	{4240,	160},	
+	{4210,	179},	
+	{4180,	183},	
+	{4160,	184},	
+	{4140,	191},	
+	{4120,	204},	
+	{4080,	200},	
+	{4027,	202},	
+	{3916,	221},	
+	{3842,	259},	
+	{3800,	262},	
+	{3715,	340},	
+	{3700,	300},	
+	{3682,  233},		
+	{3655,  246},		
+	{3639,  260},		
+	{3621,  254},		
+	{3583,  266},		
+	{3536,  274},		
+	{3502,  300},		
+	{3465,  245},		
+	{3438,  225},		
+	{3330,	305},	
+	{3300,	339},	
 };
 
 static struct v_to_res chg_res_tbl[] = {
@@ -436,9 +451,11 @@ static struct v_to_res chg_res_tbl[] = {
 	{4258, 206},
 	{4200, 231},
 	{4150, 198},
-	{4100, 205},
-	{4050, 208},
-	{4000, 228},
+	{4134, 268},
+	{4058, 172},
+	{4003, 227},
+	{3972, 241},
+	{3953, 244},
 	{3950, 213},
 	{3900, 225},
 	{3850, 212},
@@ -460,8 +477,8 @@ static const struct fg_parameters fg = {
 	.accu_high_curr = 20,
 	.high_curr_threshold = 50,
 	.lowbat_threshold = 3300,
-	.battok_falling_th_sel0 = 2860,
-	.battok_raising_th_sel1 = 2860,
+	.battok_raising_th_sel0 = 2860,
+	.battok_falling_th_sel1 = 2710,
 	.user_cap_limit = 15,
 	.maint_thres = 97,
 #ifdef CONFIG_AB8505_SMPL
@@ -483,7 +500,7 @@ static const struct battery_info battery_info = {
 	.resis_high = 7990,
 	.resis_low = 0,
 	.battery_resistance = 100,
-	.line_impedance = 36,
+	.line_impedance = 16,
 	.battery_resistance_for_charging = 200,
 	.n_v_cap_tbl_elements = ARRAY_SIZE(cap_tbl_5ma),
 	.v_to_cap_tbl = cap_tbl_5ma,
@@ -509,8 +526,8 @@ static struct battery_data_t abb_battery_data[] = {
 		.bkup_bat_v = BUP_VCH_SEL_2P5V,
 		.bkup_bat_i = BUP_ICH_SEL_50UA,
 		
-		.fg_res_chg = 125,
-		.fg_res_dischg = 130,
+		.fg_res_chg = 143,
+		.fg_res_dischg = 143,
 		.lowbat_zero_voltage = 3320,
 		
 		.abb_set_vbus_state = abb_vbus_is_detected,
@@ -565,6 +582,7 @@ sec_battery_platform_data_t sec_battery_pdata = {
 		},
 	.cable_adc_value = cable_adc_value_table,
 	.charging_current = charging_current_table,
+	.charging_current_recharging = charging_current_recharging_table,
 	.polling_time = polling_time_table,
 	/* NO NEED TO BE CHANGED */
 
@@ -637,10 +655,10 @@ sec_battery_platform_data_t sec_battery_pdata = {
 	.temp_low_threshold_lpm = -50,
 	.temp_low_recovery_lpm = 0,
 
-	.full_check_type = SEC_BATTERY_FULLCHARGED_ADC_DUAL,
+	.full_check_type = SEC_BATTERY_FULLCHARGED_ADC,
+	.full_check_type_2nd = SEC_BATTERY_FULLCHARGED_ADC,
+	.full_check_type_recharge = SEC_BATTERY_FULLCHARGED_ADC,
 	.full_check_count = 3,
-	.full_check_adc_1st = 185,
-	.full_check_adc_2nd = 145,
 	.chg_gpio_full_check = 0,
 	.chg_polarity_full_check = 1,
 	.full_condition_type =
@@ -654,6 +672,7 @@ sec_battery_platform_data_t sec_battery_pdata = {
 		SEC_BATTERY_RECHARGE_CONDITION_VCELL,
 	.recharge_condition_soc = 98,
 	.recharge_condition_vcell = 4300,
+	.recharge_check_count = 0,
 
 	.charging_total_time = 6 * 60 * 60,
 	.recharging_total_time = 90 * 60,
@@ -715,9 +734,10 @@ static int muic_accessory_notify(struct notifier_block *self,
 		break;
 	case LEGACY_CHARGER_PLUGGED:
 	case ATNT_CHARGER_PLUGGED:
+	case PLEOMAX_CHARGER_PLUGGED:
 		abb_charger_cb(true);
 		break;
-		
+
 	case CARKIT_TYPE1_PLUGGED:
 	case CARKIT_TYPE2_PLUGGED:
 	case DESKTOP_DOCK_PLUGGED:
@@ -732,11 +752,12 @@ static int muic_accessory_notify(struct notifier_block *self,
 	case CARKIT_TYPE2_UNPLUGGED:
 	case DESKTOP_DOCK_UNPLUGGED:
 	case ATNT_CHARGER_UNPLUGGED:
+	case PLEOMAX_CHARGER_UNPLUGGED:
 		abb_battery_cb();
 
 		break;
 	}
-	
+
 	return NOTIFY_OK;
 }
 		
@@ -811,7 +832,8 @@ void __init sec_init_battery(void)
 		micro_usb_register_usb_notifier(&cable_nb);
 		micro_usb_register_notifier(&cable_accessory_nb);
 	} else
-		usb_switch_register_notify(&cable_nb);
+		//usb_switch_register_notify(&cable_nb);
+		;
 
 	platform_device_register(&sec_device_battery);
 }

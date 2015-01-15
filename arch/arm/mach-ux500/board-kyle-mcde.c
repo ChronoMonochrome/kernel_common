@@ -148,8 +148,8 @@ static struct mcde_port hva40wv1_port0 = {
 	.type = MCDE_PORTTYPE_DSI,
 	.mode = MCDE_PORTMODE_CMD,
 	.pixel_format = MCDE_PORTPIXFMT_DSI_24BPP,
-	.sync_src = MCDE_SYNCSRC_OFF,
-	.frame_trig = MCDE_TRIG_SW,
+	.sync_src = MCDE_SYNCSRC_TE0,
+	.frame_trig = MCDE_TRIG_HW,
 	.phy.dsi = {
 			.num_data_lanes = 2,
 			.host_eot_gen = true,
@@ -376,10 +376,11 @@ int __init init_kyle_display_devices(void)
 
 	if (lcd_type == LCD_PANEL_TYPE_HVA40WV1)
 		ret = mcde_display_device_register(&hva40wv1_display0);
-	else {
+	else
 		ret = mcde_display_device_register(&nt35512_display0);
-		pdata->update_opp = update_mcde_opp; // increased OPP required for DSI Video Mode panel.
-	}
+
+		/* increased OPP required for DSI Mode panel */
+		pdata->update_opp = update_mcde_opp;
 
 	if (ret)
 		printk(KERN_ERR "Failed to register display device\n");

@@ -22,6 +22,11 @@
 #include <linux/cpufreq.h>
 #include <linux/mfd/dbx500-prcmu.h>
 
+#ifdef CONFIG_DEBUG_FS
+#include <linux/seq_file.h>
+#include <linux/debugfs.h>
+#endif
+
 #include <mach/prcmu-debug.h>
 
 #define ARM_THRESHOLD_FREQ 400000
@@ -81,7 +86,7 @@ static struct prcmu_qos_object ape_opp_qos = {
 	.notifiers = &prcmu_ape_opp_notifier,
 	.name = "ape_opp",
 	/* Target value in % APE OPP */
-	.default_value = 50,
+	.default_value = 25,
 	.max_value = 100,
 	.force_value = 0,
 	.target_value = ATOMIC_INIT(100),
@@ -136,6 +141,73 @@ static struct prcmu_qos_object *prcmu_qos_array[] = {
 	&arm_khz_qos,
 	&vsafe_opp_qos,
 };
+
+#ifdef CONFIG_DEBUG_FS
+static int requirements_print(struct seq_file *s, struct prcmu_qos_object *qo)
+{
+	struct requirement_list *node;
+	//TODO locking
+	list_for_each_entry(node, &qo->requirements.list, list) {
+		seq_printf(s, "%s: %d\n", node->name, node->value);
+	}
+	return 0;
+}
+
+#define PRINT_REQUIREMENTS(_name, _requirement) \
+static int _name##_requirements_print(struct seq_file *s, void *p) \
+{ \
+	requirements_print(s, prcmu_qos_array[_requirement]); \
+	return 0; \
+} \
+static int _name##_requirements_open_file(struct inode *inode, struct file *file) \
+{ \
+	return single_open(file, _name##_requirements_print, inode->i_private); \
+} \
+static const struct file_operations _name##_requirements_fops = { \
+	.open = _name##_requirements_open_file, \
+	.read = seq_read, \
+	.llseek = seq_lseek, \
+	.release = single_release, \
+	.owner = THIS_MODULE, \
+};
+
+PRINT_REQUIREMENTS(ape, PRCMU_QOS_APE_OPP);
+PRINT_REQUIREMENTS(ddr, PRCMU_QOS_DDR_OPP);
+PRINT_REQUIREMENTS(arm, PRCMU_QOS_ARM_KHZ);
+
+static int setup_debugfs(void)
+{
+	struct dentry *dir;
+	struct dentry *file;
+
+	dir = debugfs_create_dir("prcmu-qos", NULL);
+	if (IS_ERR_OR_NULL(dir))
+		goto fail;
+
+	file = debugfs_create_file("ape_requirements", (S_IRUGO),
+				   dir, NULL, &ape_requirements_fops);
+	if (IS_ERR_OR_NULL(file))
+		goto fail;
+
+	file = debugfs_create_file("arm_requirements", (S_IRUGO),
+				   dir, NULL, &arm_requirements_fops);
+	if (IS_ERR_OR_NULL(file))
+		goto fail;
+
+	file = debugfs_create_file("ddr_requirements", (S_IRUGO),
+				   dir, NULL, &ddr_requirements_fops);
+	if (IS_ERR_OR_NULL(file))
+		goto fail;
+
+	return 0;
+fail:
+	if (!IS_ERR_OR_NULL(dir))
+		debugfs_remove_recursive(dir);
+
+	pr_err("prcmu qos debug: debugfs entry failed\n");
+	return -ENOMEM;
+}
+#endif
 
 static DEFINE_MUTEX(prcmu_qos_mutex);
 static DEFINE_SPINLOCK(prcmu_qos_lock);
@@ -334,8 +406,9 @@ static void update_target(int target, bool sem)
 			break;
 	case PRCMU_QOS_APE_OPP:
 		switch (extreme_value) {
+		case 25:
 		case 50:
-			if (ape_opp_50_partly_25_enabled)
+			if (ape_opp_50_partly_25_enabled || extreme_value == 25)
 				op = APE_50_PARTLY_25_OPP;
 			else
 				op = APE_50_OPP;
@@ -505,6 +578,11 @@ static int __prcmu_qos_add_requirement(int prcmu_qos_class, char *name,
 	struct requirement_list *dep;
 	unsigned long flags;
 
+	//ignore duplicate names
+	list_for_each_entry(dep, &prcmu_qos_array[prcmu_qos_class]->requirements.list, list) {
+		if (!strcmp(dep->name, name)) return 0;
+	}
+
 	dep = kzalloc(sizeof(struct requirement_list), GFP_KERNEL);
 	if (dep == NULL)
 		return -ENOMEM;
@@ -604,7 +682,8 @@ static int __prcmu_qos_update_requirement(int prcmu_qos_class, char *name,
 int prcmu_qos_update_requirement(int prcmu_qos_class, char *name,
 		s32 val)
 {
-
+	if (prcmu_qos_class == PRCMU_QOS_ARM_KHZ)
+		return 0;
 	return __prcmu_qos_update_requirement(prcmu_qos_class, name,
 			val, true);
 }
@@ -946,8 +1025,10 @@ static int __init prcmu_qos_power_init(void)
 			PRCMU_QOS_DEFAULT_VALUE);
 	cpufreq_requirement_set = PRCMU_QOS_DEFAULT_VALUE;
 	cpufreq_requirement_queued = PRCMU_QOS_DEFAULT_VALUE;
+/*
 	cpufreq_register_notifier(&qos_delayed_cpufreq_notifier_block,
 			CPUFREQ_TRANSITION_NOTIFIER);
+*/
 	if (cpu_is_u9540()) {
 		prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, "cpufreq",
 				PRCMU_QOS_DEFAULT_VALUE);
@@ -960,6 +1041,10 @@ static int __init prcmu_qos_power_init(void)
 		prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "cross_opp_arm",
 				PRCMU_QOS_DEFAULT_VALUE);
 	}
+
+#ifdef CONFIG_DEBUG_FS
+	ret = setup_debugfs();
+#endif
 
 	return ret;
 
