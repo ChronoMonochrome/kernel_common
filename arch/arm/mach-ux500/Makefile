@@ -75,6 +75,7 @@ ifeq ($(CONFIG_MACH_CODINA), y)
 board-mcde-objs			+= board-codina-mcde.o
 endif
 
+
 obj-$(CONFIG_MACH_SEC_GOLDEN)		+= board-golden-pins.o board-golden.o board-golden-regulators.o \
 					    board-golden-bm.o board-golden-battery.o board-golden-sdi.o
 ifeq ($(CONFIG_MACH_SEC_GOLDEN), y)
