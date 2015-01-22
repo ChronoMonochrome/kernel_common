@@ -365,6 +365,7 @@ NORET_TYPE void panic(const char * fmt, ...)
 	va_list args;
 	long i, i_next = 0;
 	int state = 0;
+
 	/* disable the SMPL feature */
 	ab8500_sysctrl_write(0x0F12, 0x1, 0x0);
 
