@@ -429,44 +429,11 @@ ecryptfs_miscdev_write(struct file *file, const char __user *buf,
 	size_t packet_size, packet_size_length;
 	char *data;
 	uid_t euid = current_euid();
-	unsigned char packet_size_peek[ECRYPTFS_MAX_PKT_LEN_SIZE];
-	ssize_t rc;
+	int rc;
 
-	if (count == 0) {
-		return 0;
-	} else if (count == MIN_NON_MSG_PKT_SIZE) {
-		/* Likely a harmless MSG_HELO or MSG_QUIT - no packet length */
-		goto memdup;
-	} else if (count < MIN_MSG_PKT_SIZE || count > MAX_MSG_PKT_SIZE) {
-		printk(KERN_WARNING "%s: Acceptable packet size range is "
-		       "[%d-%zu], but amount of data written is [%zu].",
-		       __func__, MIN_MSG_PKT_SIZE, MAX_MSG_PKT_SIZE, count);
-		return -EINVAL;
-	}
+	if (count == 0)
+		goto out;
 
-	if (copy_from_user(packet_size_peek, &buf[PKT_LEN_OFFSET],
-			   sizeof(packet_size_peek))) {
-		printk(KERN_WARNING "%s: Error while inspecting packet size\n",
-		       __func__);
-		return -EFAULT;
-	}
-
-	rc = ecryptfs_parse_packet_length(packet_size_peek, &packet_size,
-					  &packet_size_length);
-	if (rc) {
-		printk(KERN_WARNING "%s: Error parsing packet length; "
-		       "rc = [%zd]\n", __func__, rc);
-		return rc;
-	}
-
-	if ((PKT_TYPE_SIZE + PKT_CTR_SIZE + packet_size_length + packet_size)
-	    != count) {
-		printk(KERN_WARNING "%s: Invalid packet size [%zu]\n", __func__,
-		       packet_size);
-		return -EINVAL;
-	}
-
-memdup:
 	data = memdup_user(buf, count);
 	if (IS_ERR(data)) {
 		printk(KERN_ERR "%s: memdup_user returned error [%ld]\n",
@@ -488,11 +455,27 @@ memdup:
 		}
 		memcpy(&counter_nbo, &data[PKT_CTR_OFFSET], PKT_CTR_SIZE);
 		seq = be32_to_cpu(counter_nbo);
-		rc = ecryptfs_miscdev_response(
-				&data[PKT_LEN_OFFSET + packet_size_length],
-				packet_size, euid, current_user_ns(),
-				task_pid(current), seq);
+		i += 4;
+		rc = ecryptfs_parse_packet_length(&data[i], &packet_size,
+						  &packet_size_length);
 		if (rc) {
+			printk(KERN_WARNING "%s: Error parsing packet length; "
+			       "rc = [%d]\n", __func__, rc);
+			goto out_free;
+		}
+		i += packet_size_length;
+		if ((1 + 4 + packet_size_length + packet_size) != count) {
+			printk(KERN_WARNING "%s: (1 + packet_size_length([%zd])"
+			       " + packet_size([%zd]))([%zd]) != "
+			       "count([%zd]). Invalid packet format.\n",
+			       __func__, packet_size_length, packet_size,
+			       (1 + packet_size_length + packet_size), count);
+			goto out_free;
+		}
+		rc = ecryptfs_miscdev_response(&data[i], packet_size,
+					       euid, current_user_ns(),
+					       task_pid(current), seq);
+		if (rc)
 			printk(KERN_WARNING "%s: Failed to deliver miscdev "
 			       "response to requesting operation; rc = [%zd]\n",
 			       __func__, rc);
