@@ -5,6 +5,8 @@
 # Each configuration option enables a list of files.
 
 obj-$(CONFIG_INPUT_88PM860X_ONKEY)	+= 88pm860x_onkey.o
+obj-$(CONFIG_INPUT_AB8500_ACCDET)       += abx500-accdet.o ab8500-accdet.o
+obj-$(CONFIG_INPUT_AB5500_ACCDET)	+= abx500-accdet.o ab5500-accdet.o
 obj-$(CONFIG_INPUT_AB8500_PONKEY)	+= ab8500-ponkey.o
 obj-$(CONFIG_INPUT_AD714X)		+= ad714x.o
 obj-$(CONFIG_INPUT_AD714X_I2C)		+= ad714x-i2c.o
@@ -30,7 +32,8 @@ obj-$(CONFIG_HP_SDC_RTC)		+= hp_sdc_rtc.o
 obj-$(CONFIG_INPUT_IXP4XX_BEEPER)	+= ixp4xx-beeper.o
 obj-$(CONFIG_INPUT_KEYCHORD)		+= keychord.o
 obj-$(CONFIG_INPUT_KEYSPAN_REMOTE)	+= keyspan_remote.o
-obj-$(CONFIG_INPUT_KXTJ9)		+= kxtj9.o
+obj-$(CONFIG_INPUT_LPS001WP)		+= lps001wp_prs.o
+obj-$(CONFIG_INPUT_LPS331AP)		+= lps331ap.o
 obj-$(CONFIG_INPUT_M68K_BEEP)		+= m68kspkr.o
 obj-$(CONFIG_INPUT_MAX8925_ONKEY)	+= max8925_onkey.o
 obj-$(CONFIG_INPUT_MAX8997_HAPTIC)	+= max8997_haptic.o
@@ -57,3 +60,6 @@ obj-$(CONFIG_INPUT_WISTRON_BTNS)	+= wistron_btns.o
 obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
 obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
+obj-$(CONFIG_INPUT_STE_FF_VIBRA)	+= ste_ff_vibra.o
+obj-$(CONFIG_INPUT_AB8505_MICRO_USB_DETECT)	+= ab8505_micro_usb_iddet.o
+obj-$(CONFIG_INPUT_MPU6050)		+= mpu6050_input.o mpu6050_selftest.o
