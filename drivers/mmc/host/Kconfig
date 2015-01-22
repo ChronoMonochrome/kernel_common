@@ -297,13 +297,14 @@ config MMC_ATMELMCI
 
 endchoice
 
-config MMC_IMX
-	tristate "Motorola i.MX Multimedia Card Interface support"
-	depends on ARCH_MX1
+config MMC_ATMELMCI_DMA
+	bool "Atmel MCI DMA support (EXPERIMENTAL)"
+	depends on MMC_ATMELMCI && (AVR32 || ARCH_AT91SAM9G45) && DMA_ENGINE && EXPERIMENTAL
 	help
-	  This selects the Motorola i.MX Multimedia card Interface.
-	  If you have a i.MX platform with a Multimedia Card slot,
-	  say Y or M here.
+	  Say Y here to have the Atmel MCI driver use a DMA engine to
+	  do data transfers and thus increase the throughput and
+	  reduce the CPU utilization. Note that this is highly
+	  experimental and may cause the driver to lock up.
 
 	  If unsure, say N.
 
