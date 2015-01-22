@@ -1156,7 +1156,7 @@ static int __devinit ace_probe(struct platform_device *dev)
 	resource_size_t physaddr = 0;
 	int bus_width = ACE_BUS_WIDTH_16; /* FIXME: should not be hard coded */
 	u32 id = dev->id;
-	int irq = 0;
+	int irq = NO_IRQ;
 	int i;
 
 	dev_dbg(&dev->dev, "ace_probe(%p)\n", dev);
