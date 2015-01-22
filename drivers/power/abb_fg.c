@@ -19,30 +19,25 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
-#include <linux/kobject.h>
 #include <linux/mfd/ab8500.h>
 #include <linux/mfd/abx500.h>
 #include <linux/slab.h>
-#include <linux/mfd/abx500/ab8500-bm.h>
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 #include <linux/gpio.h>
 #include <linux/err.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/notifier.h>
 #include <linux/wakelock.h>
-#endif
+#include <linux/mfd/abx500/ab8500-bm.h>
 #include <linux/delay.h>
 #include <linux/mfd/abx500/ab8500-gpadc.h>
 #include <linux/mfd/abx500.h>
 #include <linux/time.h>
 #include <linux/completion.h>
-#include <linux/kernel.h>
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 #include <linux/regulator/consumer.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#include <mach/board-sec-ux500.h>
+#include <mach/board-sec-u8500.h>
 #include <mach/sec_param.h>
 #include <linux/kernel.h>
 
@@ -52,20 +47,22 @@
 #define INS_CURR_TIMEOUT		(3 * HZ)
 
 #if defined(CONFIG_MACH_JANICE)
+#define USE_COMPENSATING_VOLTAGE_SAMPLE_FOR_CHARGING
 #define FGRES_HWREV_02			133
 #define FGRES_HWREV_02_CH		133
 #define FGRES_HWREV_03			121
 #define FGRES_HWREV_03_CH		120
-#elif defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE) || defined(CONFIG_MACH_SEC_GOLDEN)  || defined(CONFIG_MACH_SEC_SKOMER)
+#elif defined(CONFIG_MACH_CODINA)
 #define USE_COMPENSATING_VOLTAGE_SAMPLE_FOR_CHARGING
 #define FGRES				130
 #define FGRES_CH			125
-#elif defined(CONFIG_MACH_VENUS)
-#define FGRES				680
-#define FGRES_CH			680
+#elif defined(CONFIG_MACH_GAVINI)
+#define USE_COMPENSATING_VOLTAGE_SAMPLE_FOR_CHARGING
+#define FGRES				130
+#define FGRES_CH			112
 #else
 #define FGRES				130
-#define FGRES_CH			133
+#define FGRES_CH			120
 #endif
 
 #define MAGIC_CODE			0x29
@@ -83,30 +80,23 @@
 
 #define LOWBAT_TOLERANCE		40
 #define LOWBAT_ZERO_VOLTAGE		3320
-#define BAT_GOOD_VOLTAGE		3450
 
 #define MAIN_CH_NO_OVERSHOOT_ENA_N	0x02
 #define MAIN_CH_ENA			0x01
-#endif /* CONFIG_SAMSUNG_CHARGER_SPEC */
+
 
 #define MILLI_TO_MICRO			1000
 #define FG_LSB_IN_MA			1627
 #define QLSB_NANO_AMP_HOURS_X10		1129
-#define INS_CURR_TIMEOUT		(3 * HZ)
 
 #define SEC_TO_SAMPLE(S)		(S * 4)
 
 #define NBR_AVG_SAMPLES			20
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 #define LOW_BAT_CHECK_INTERVAL		(5 * HZ)
-#else
-#define LOW_BAT_CHECK_INTERVAL		(HZ / 16) /* 62.5 ms */
-#endif
 
 #define VALID_CAPACITY_SEC		(45 * 60) /* 45 minutes */
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 #define VBAT_ADC_CAL			3700
 
 #define CONFIG_BATT_CAPACITY_PARAM
@@ -116,16 +106,6 @@
 #define IGNORE_VBAT_HIGHCUR	-500 /* -500mA */
 #define CURR_VAR_HIGH	100 /*100mA*/
 #define NBR_CURR_SAMPLES	10
-#endif
-
-#define BATT_OK_MIN			2360 /* mV */
-#define BATT_OK_INCREMENT		50 /* mV */
-#define BATT_OK_MAX_NR_INCREMENTS	0xE
-
-/* FG constants */
-#define BATT_OVV			0x01
-#define CHARGSTOP_SECUR			0x08
-#define USBCH_ON			0x04
 
 #ifndef ABS
 #define ABS(a) ((a) > 0 ? (a) : -(a))
@@ -137,7 +117,6 @@
 #define to_ab8500_fg_device_info(x) container_of((x), \
 	struct ab8500_fg, fg_psy);
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 extern void (*sec_set_param_value) (int idx, void *value);
 extern void (*sec_get_param_value) (int idx, void *value);
 extern int register_reboot_notifier(struct notifier_block *nb);
@@ -180,7 +159,6 @@ static char *states[] = {
 	"TIMED_OUT_CHARGING_INIT",
 	"TIMED_OUT_CHARGING",
 };
-#endif
 
 /**
  * struct ab8500_fg_interrupts - ab8500 fg interupts
@@ -197,7 +175,6 @@ enum ab8500_fg_discharge_state {
 	AB8500_FG_DISCHARGE_INITMEASURING,
 	AB8500_FG_DISCHARGE_INIT_RECOVERY,
 	AB8500_FG_DISCHARGE_RECOVERY,
-	AB8500_FG_DISCHARGE_READOUT_INIT,
 	AB8500_FG_DISCHARGE_READOUT,
 	AB8500_FG_DISCHARGE_WAKEUP,
 };
@@ -207,7 +184,6 @@ static char *discharge_state[] = {
 	"DISCHARGE_INITMEASURING",
 	"DISCHARGE_INIT_RECOVERY",
 	"DISCHARGE_RECOVERY",
-	"DISCHARGE_READOUT_INIT",
 	"DISCHARGE_READOUT",
 	"DISCHARGE_WAKEUP",
 };
@@ -236,15 +212,6 @@ struct ab8500_fg_avg_cap {
 	int nbr_samples;
 	int sum;
 };
-
-struct ab8500_fg_cap_scaling {
-	bool enable;
-	int cap_to_scale[2];
-	int disable_cap_level;
-	int scaled_cap;
-};
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 struct ab8500_fg_vbased_cap {
 	int avg;
 	int samples[NBR_AVG_SAMPLES];
@@ -264,7 +231,6 @@ struct ab8500_fg_instant_current {
 	int sum;
 	int pos;
 };
-#endif
 
 struct ab8500_fg_battery_capacity {
 	int max_mah_design;
@@ -275,8 +241,6 @@ struct ab8500_fg_battery_capacity {
 	int prev_mah;
 	int prev_percent;
 	int prev_level;
-	int user_mah;
-	struct ab8500_fg_cap_scaling cap_scale;
 };
 
 struct ab8500_fg_flags {
@@ -284,26 +248,14 @@ struct ab8500_fg_flags {
 	bool conv_done;
 	bool charging;
 	bool fully_charged;
-	bool force_full;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	bool fully_charged_1st;
 	bool chg_timed_out;
-#endif
 	bool low_bat_delay;
 	bool low_bat;
-	bool bat_ovv;
 	bool batt_unknown;
 	bool calibrate;
-	bool user_cap;
-	bool batt_id_received;
 };
 
-struct inst_curr_result_list {
-	struct list_head list;
-	int *result;
-};
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 enum cal_channels {
 	ADC_INPUT_VMAIN = 0,
 	ADC_INPUT_BTEMP,
@@ -329,36 +281,28 @@ struct ab8500_gpadc {
 	int reference_count ;
 	spinlock_t reference_count_spinlock ;
 };
-#endif
 
 /**
  * struct ab8500_fg - ab8500 FG device information
  * @dev:		Pointer to the structure device
- * @node:		a list of AB8500 FGs, hence prepared for reentrance
- * @irq			holds the CCEOC interrupt number
  * @vbat:		Battery voltage in mV
  * @vbat_adc:		Battery voltage in ADC
  * @vbat_nom:		Nominal battery voltage in mV
  * @inst_curr:		Instantenous battery current in mA
  * @avg_curr:		Average battery current in mA
- * @bat_temp		battery temperature
  * @fg_samples:		Number of samples used in the FG accumulation
  * @accu_charge:	Accumulated charge from the last conversion
  * @recovery_cnt:	Counter for recovery mode
  * @high_curr_cnt:	Counter for high current mode
  * @init_cnt:		Counter for init mode
- * @low_bat_cnt		Counter for number of consecutive low battery measures
- * @nbr_cceoc_irq_cnt	Counter for number of CCEOC irqs received since enabled
  * @recovery_needed:	Indicate if recovery is needed
  * @high_curr_mode:	Indicate if we're in high current mode
  * @vbat_cal_offset:	voltage offset  for calibarating vbat
  * @init_capacity:	Indicate if initial capacity measuring should be done
- * @turn_off_fg:	True if fg was off before current measurement
  * @calib_state		State during offset calibration
  * @discharge_state:	Current discharge state
  * @charge_state:	Current charge state
- * @ab8500_fg_started	Completion struct used for the instant current start
- * @ab8500_fg_complete	Completion struct used for the instant current reading
+ * @node:		Struct of type list_head
  * @flags:		Structure for information about events triggered
  * @bat_cap:		Structure for battery capacity specific parameters
  * @avg_cap:		Average capacity filter
@@ -370,41 +314,30 @@ struct ab8500_gpadc {
  * @fg_wq:		Work queue for running the FG algorithm
  * @fg_periodic_work:	Work to run the FG algorithm periodically
  * @fg_low_bat_work:	Work to check low bat condition
- * @fg_reinit_work	Work used to reset and reinitialise the FG algorithm
  * @fg_work:		Work to run the FG algorithm instantly
+ * @fg_reinit_work	Work used to reset and reinitialise the FG algorithm
  * @fg_acc_cur_work:	Work to read the FG accumulator
- * @fg_check_hw_failure_work:	Work for checking HW state
  * @cc_lock:		Mutex for locking the CC
- * @fg_kobject:		Structure of type kobject
  * @lowbat_wake_lock	Wakelock for low battery
  * @cc_wake_lock	Wakelock for Coulomb Counter
  */
 struct ab8500_fg {
 	struct device *dev;
-	struct list_head node;
-	int irq;
 	int vbat;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
+	int irq;
 	int vbat_adc;
 	int vbat_adc_compensated;
 	int vbat_cal_offset;
-#endif
 	int vbat_nom;
 	int inst_curr;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	int skip_add_sample;
 	int n_skip_add_sample;
-#endif
 	int avg_curr;
-	int bat_temp;
 	int fg_samples;
 	int accu_charge;
 	int recovery_cnt;
 	int high_curr_cnt;
 	int init_cnt;
-	int low_bat_cnt;
-	int nbr_cceoc_irq_cnt;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	int new_capacity;
 	int param_capacity;
 	int prev_capacity;
@@ -415,30 +348,26 @@ struct ab8500_fg {
 	int reenable_charing;
 	int fg_res_dischg;
 	int fg_res_chg;
+	int input_curr_reg;
+	bool turn_off_fg;
 	bool initial_capacity_calib;
-#endif
 	bool recovery_needed;
 	bool high_curr_mode;
 	bool init_capacity;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	bool reinit_capacity;
 	bool lpm_chg_mode;
 	bool lowbat_poweroff;
 	bool lowbat_poweroff_locked;
 	bool max_cap_changed;
-#endif
-	bool turn_off_fg;
 	enum ab8500_fg_calibration_state calib_state;
 	enum ab8500_fg_discharge_state discharge_state;
 	enum ab8500_fg_charge_state charge_state;
-	struct completion ab8500_fg_started;
+	struct list_head node;
 	struct completion ab8500_fg_complete;
 	struct ab8500_fg_flags flags;
 	struct ab8500_fg_battery_capacity bat_cap;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	struct ab8500_fg_vbased_cap vbat_cap;
 	struct ab8500_fg_instant_current inst_cur;
-#endif
 	struct ab8500_fg_avg_cap avg_cap;
 	struct ab8500 *parent;
 	struct ab8500_gpadc *gpadc;
@@ -449,22 +378,14 @@ struct ab8500_fg {
 	struct delayed_work fg_periodic_work;
 	struct delayed_work fg_low_bat_work;
 	struct delayed_work fg_reinit_work;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	struct delayed_work fg_reinit_param_work;
-#endif
 	struct work_struct fg_work;
 	struct work_struct fg_acc_cur_work;
-	struct delayed_work fg_check_hw_failure_work;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	struct notifier_block fg_notifier;
-#endif
 	struct mutex cc_lock;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	struct wake_lock lowbat_wake_lock;
 	struct wake_lock lowbat_poweroff_wake_lock;
 	struct wake_lock cc_wake_lock;
-#endif
-	struct kobject fg_kobject;
 };
 static LIST_HEAD(ab8500_fg_list);
 
@@ -494,11 +415,10 @@ static enum power_supply_property ab8500_fg_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN,
-#endif
 };
 
 /*
@@ -606,7 +526,6 @@ static int ab8500_fg_is_low_curr(struct ab8500_fg *di, int curr)
 		return false;
 }
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 /* Voltage based capacity */
 static void ab8500_fg_fill_vcap_sample(struct ab8500_fg *di, int sample)
 {
@@ -620,7 +539,7 @@ static void ab8500_fg_fill_vcap_sample(struct ab8500_fg *di, int sample)
 		avg->samples[i] = sample;
 		avg->time_stamps[i] = ts.tv_sec;
 	}
-	pr_debug("[FG]Filled vcap: %d\n", sample);
+	dev_dbg(di->dev, "Filled vcap: %d\n", sample);
 	avg->pos = 0;
 	avg->nbr_samples = NBR_AVG_SAMPLES;
 	avg->sum = sample * NBR_AVG_SAMPLES;
@@ -650,7 +569,7 @@ static int ab8500_fg_add_vcap_sample(struct ab8500_fg *di, int sample)
 		 * replace with latest sample
 		 */
 	} while (ts.tv_sec - VALID_CAPACITY_SEC > avg->time_stamps[avg->pos]);
-	pr_debug("[FG]Added vcap: %d, average: %d, nsamples: %d\n",
+	dev_dbg(di->dev, "Added vcap: %d, average: %d, nsamples: %d\n",
 		sample, avg->avg, avg->nbr_samples);
 
 	avg->avg = avg->sum / avg->nbr_samples;
@@ -669,7 +588,7 @@ static void ab8500_fg_fill_i_sample(struct ab8500_fg *di, int sample)
 		avg->samples[i] = 0;
 		avg->time_stamps[i] = ts.tv_sec;
 	}
-	pr_debug("[FG]Filled curr sampe: 0, pre_sample : %d\n", sample);
+	dev_dbg(di->dev, "Filled curr sampe: 0, pre_sample : %d\n", sample);
 	avg->pos = 0;
 	avg->nbr_samples = 1;
 	avg->sum = 0;
@@ -714,7 +633,9 @@ static void ab8500_fg_add_i_sample(struct ab8500_fg *di, int sample)
 			avg->high_diff_nbr++;
 	}
 
-	pr_debug("[FG]Added curr sample: %d, diff:%d, average: %d, high_diff_nbr: %d\n",
+	dev_dbg(di->dev,
+		"Added curr sample: %d, diff:%d, average: "
+		"%d, high_diff_nbr: %d\n",
 		sample, diff, avg->avg, avg->high_diff_nbr);
 
 	avg->avg = avg->sum / avg->nbr_samples;
@@ -722,8 +643,6 @@ static void ab8500_fg_add_i_sample(struct ab8500_fg *di, int sample)
 }
 
 /* Voltage based capacity END */
-#endif
-
 /**
  * ab8500_fg_add_cap_sample() - Add capacity to average filter
  * @di:		pointer to the ab8500_fg structure
@@ -764,24 +683,24 @@ static int ab8500_fg_add_cap_sample(struct ab8500_fg *di, int sample)
 
 /**
  * ab8500_fg_clear_cap_samples() - Clear average filter
- * @di:		pointer to the ab8500_fg structure
+ * @di:        pointer to the ab8500_fg structure
  *
- * The capacity filter is is reset to zero.
+ * The capacity filter is filled with a capacity in mAh
  */
 static void ab8500_fg_clear_cap_samples(struct ab8500_fg *di)
 {
 	int i;
 	struct ab8500_fg_avg_cap *avg = &di->avg_cap;
 
-	avg->pos = 0;
-	avg->nbr_samples = 0;
-	avg->sum = 0;
-	avg->avg = 0;
-
 	for (i = 0; i < NBR_AVG_SAMPLES; i++) {
 		avg->samples[i] = 0;
 		avg->time_stamps[i] = 0;
+		avg->pos = 0;
+		avg->nbr_samples = 0;
+		avg->sum = 0;
+		avg->avg = 0;
 	}
+
 }
 
 /**
@@ -847,9 +766,8 @@ static int ab8500_fg_coulomb_counter(struct ab8500_fg *di, bool enable)
 		di->flags.fg_enabled = true;
 	} else {
 		/* Clear any pending read requests */
-		ret = abx500_mask_and_set_register_interruptible(di->dev,
-			AB8500_GAS_GAUGE, AB8500_GASG_CC_CTRL_REG,
-			(RESET_ACCU | READ_REQ), 0);
+		ret = abx500_set_register_interruptible(di->dev,
+			AB8500_GAS_GAUGE, AB8500_GASG_CC_CTRL_REG, 0);
 		if (ret)
 			goto cc_err;
 
@@ -894,8 +812,6 @@ int ab8500_fg_inst_curr_start(struct ab8500_fg *di)
 
 	mutex_lock(&di->cc_lock);
 	dev_dbg(di->dev, "Inst curr start\n");
-
-	di->nbr_cceoc_irq_cnt = 0;
 	ret = abx500_get_register_interruptible(di->dev, AB8500_RTC,
 		AB8500_RTC_CC_CONF_REG, &reg_val);
 	if (ret < 0)
@@ -923,7 +839,6 @@ int ab8500_fg_inst_curr_start(struct ab8500_fg *di)
 	}
 
 	/* Return and WFI */
-	INIT_COMPLETION(di->ab8500_fg_started);
 	INIT_COMPLETION(di->ab8500_fg_complete);
 	enable_irq(di->irq);
 
@@ -932,17 +847,6 @@ int ab8500_fg_inst_curr_start(struct ab8500_fg *di)
 fail:
 	mutex_unlock(&di->cc_lock);
 	return ret;
-}
-
-/**
- * ab8500_fg_inst_curr_started() - check if fg conversion has started
- * @di:         pointer to the ab8500_fg structure
- *
- * Returns 1 if conversion started, 0 if still waiting
- */
-int ab8500_fg_inst_curr_started(struct ab8500_fg *di)
-{
-	return completion_done(&di->ab8500_fg_started);
 }
 
 /**
@@ -980,7 +884,6 @@ int ab8500_fg_inst_curr_finalize(struct ab8500_fg *di, int *res)
 		if (!timeout) {
 			ret = -ETIME;
 			disable_irq(di->irq);
-			di->nbr_cceoc_irq_cnt = 0;
 			dev_err(di->dev, "completion timed out [%d]\n",
 				__LINE__);
 			goto fail;
@@ -988,14 +891,13 @@ int ab8500_fg_inst_curr_finalize(struct ab8500_fg *di, int *res)
 	}
 
 	disable_irq(di->irq);
-	di->nbr_cceoc_irq_cnt = 0;
 
 	ret = abx500_mask_and_set_register_interruptible(di->dev,
 			AB8500_GAS_GAUGE, AB8500_GASG_CC_CTRL_REG,
 			READ_REQ, READ_REQ);
 
 	/* 100uS between read request and read is needed */
-	usleep_range(100, 100);
+	udelay(100);
 
 	/* Read CC Sample conversion value Low and high */
 	ret = abx500_get_register_interruptible(di->dev, AB8500_GAS_GAUGE,
@@ -1054,16 +956,14 @@ fail:
 }
 
 /**
- * ab8500_fg_inst_curr_blocking() - battery instantaneous current
+ * ab8500_fg_inst_curr() - battery instantaneous current
  * @di:         pointer to the ab8500_fg structure
- * @res:	battery instantenous current(on success)
  *
- * Returns 0 else error code
+ * Returns battery instantenous current(on success) else error code
  */
-int ab8500_fg_inst_curr_blocking(struct ab8500_fg *di)
+int ab8500_fg_inst_curr(struct ab8500_fg *di)
 {
 	int ret;
-	int timeout;
 	int res = 0;
 	dev_dbg(di->dev, "Inst curr blocking\n");
 	ret = ab8500_fg_inst_curr_start(di);
@@ -1072,33 +972,14 @@ int ab8500_fg_inst_curr_blocking(struct ab8500_fg *di)
 		return 0;
 	}
 
-	/* Wait for CC to actually start */
-	if (!completion_done(&di->ab8500_fg_started)) {
-		timeout = wait_for_completion_timeout(
-			&di->ab8500_fg_started,
-			INS_CURR_TIMEOUT);
-		dev_dbg(di->dev, "Start time: %d ms\n",
-			((INS_CURR_TIMEOUT - timeout) * 1000) / HZ);
-		if (!timeout) {
-			ret = -ETIME;
-			dev_err(di->dev, "completion timed out [%d]\n",
-				__LINE__);
-			goto fail;
-		}
-	}
-
 	ret = ab8500_fg_inst_curr_finalize(di, &res);
+	dev_dbg(di->dev, "Inst curr blocking read %d\n", res);
 	if (ret) {
 		dev_err(di->dev, "Failed to finalize fg_inst\n");
 		return 0;
 	}
 
-	dev_dbg(di->dev, "%s instant current: %d", __func__, res);
 	return res;
-fail:
-	disable_irq(di->irq);
-	mutex_unlock(&di->cc_lock);
-	return ret;
 }
 
 /**
@@ -1155,13 +1036,15 @@ static void ab8500_fg_acc_cur_work(struct work_struct *work)
 
 	/*
 	 * Convert to unit value in mA
-	 * by dividing by the conversion
+	 * Full scale input voltage is
+	 * 66.660mV => LSB = 66.660mV/(4096*res) = 1.627mA
+	 * Given a 250ms conversion cycle time the LSB corresponds
+	 * to 112.9 nAh. Convert to current by dividing by the conversion
 	 * time in hours (= samples / (3600 * 4)h)
-	 * and multiply with 1000
+	 * 112.9nAh assumes 10mOhm, but fg_res is in 0.1mOhm
 	 */
-
-	di->avg_curr = (di->accu_charge * 36) /
-			((di->fg_samples / 4) * 10);
+	di->avg_curr = (val * QLSB_NANO_AMP_HOURS_X10 * 36) /
+		(1000 * di->bat->fg_res * (di->fg_samples / 4));
 
 	di->flags.conv_done = true;
 
@@ -1169,14 +1052,13 @@ static void ab8500_fg_acc_cur_work(struct work_struct *work)
 
 	queue_work(di->fg_wq, &di->fg_work);
 
-	dev_dbg(di->dev, "fg_res: %d, fg_samples: %d, gasg: %d, accu_charge: %d \n",
-				di->bat->fg_res, di->fg_samples, val, di->accu_charge);
 	return;
 exit:
 	dev_err(di->dev,
 		"Failed to read or write gas gauge registers\n");
 	mutex_unlock(&di->cc_lock);
-	queue_work(di->fg_wq, &di->fg_work);
+	queue_work(di->fg_wq,
+		&di->fg_work);
 }
 
 /**
@@ -1185,34 +1067,45 @@ exit:
  *
  * Returns battery voltage(on success) else error code
  */
-static int ab8500_fg_bat_voltage(struct ab8500_fg *di
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	,bool fg_only)
-#else
-	)
-#endif
+static int ab8500_fg_bat_voltage(struct ab8500_fg *di,
+	bool fg_only)
 {
 	int vbat;
+	int ad_value;
+	int raw_adc;
+
 	static int prev;
 
-	vbat = ab8500_gpadc_convert(di->gpadc, MAIN_BAT_V);
-	if (vbat < 0) {
-		dev_err(di->dev,
-			"%s gpadc conversion failed, using previous value\n",
-			__func__);
+	ad_value = ab8500_gpadc_read_raw(di->gpadc, MAIN_BAT_V, SAMPLE_16, RISING_EDGE, 0, ADC_SW);
+	if (ad_value < 0) {
+		dev_err(di->dev, "GPADC raw value failed ch: %d\n", MAIN_BAT_V);
 		return prev;
 	}
+
+	raw_adc = ad_value;
+	/* FG algotithm is compensating this offset.
+	   so removing for the duplicate work. */
+	if (!fg_only)
+		ad_value += di->vbat_cal_offset;
+
+	vbat = ab8500_gpadc_ad_to_voltage(di->gpadc, MAIN_BAT_V, ad_value);
+	if (vbat < 0) {
+		dev_err(di->dev, "GPADC to voltage conversion failed ch:"
+			" %d ADC: 0x%x\n", MAIN_BAT_V, ad_value);
+		return prev;
+	}
+
+	di->vbat_adc = raw_adc;
+	di->vbat_adc_compensated = ad_value;
 
 #ifdef CONFIG_MACH_JANICE
 	if (di->smd_on)
 		vbat += 150;
 #endif
-
 	prev = vbat;
 	return vbat;
 }
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 /**
  * ab8500_fg_volt_to_resistance() - get battery resistance depending on voltage
  * @di:		pointer to the ab8500_fg structure
@@ -1300,14 +1193,14 @@ static int ab8500_comp_fg_bat_voltage(struct ab8500_fg *di,
 		vbat += ab8500_fg_bat_voltage(di, true);
 		i++;
 		dev_dbg(di->dev, "LoadComp Vbat avg [%d] %d\n", i, vbat/i);
-		msleep(5);
+		usleep_range(5000, 5001);
 	} while (!ab8500_fg_inst_curr_done(di) &&
 		i <= WAIT_FOR_INST_CURRENT_MAX);
 
 	if (i > WAIT_FOR_INST_CURRENT_MAX) {
-		dev_dbg(di->dev, "Inst curr reading took too long, %d times\n",
+		dev_info(di->dev, "Inst curr reading took too long, %d times\n",
 			i);
-		pr_info("[FG]Returned uncompensated vbat\n");
+		dev_dbg(di->dev, "returned uncompensated vbat\n");
 		if (!always)
 			return -1;
 		di->vbat = vbat / i;
@@ -1322,14 +1215,12 @@ static int ab8500_comp_fg_bat_voltage(struct ab8500_fg *di,
 	if (!di->flags.charging)
 		ab8500_fg_add_i_sample(di, di->inst_curr);
 
-	vbat = vbat / i;
+	di->vbat = vbat / i;
 
 #if defined(CONFIG_MACH_JANICE) || \
 	defined(CONFIG_MACH_CODINA) || \
-	defined(CONFIG_MACH_GAVINI) || \
-	defined(CONFIG_MACH_SEC_KYLE) || defined(CONFIG_MACH_SEC_GOLDEN) || \
-	defined(CONFIG_MACH_VENUS)  || defined(CONFIG_MACH_SEC_SKOMER)
-	bat_res_comp = ab8500_fg_volt_to_resistance(di, vbat);
+	defined(CONFIG_MACH_GAVINI)
+	bat_res_comp = ab8500_fg_volt_to_resistance(di, di->vbat);
 #else
 	bat_res_comp = di->bat->bat_type[di->bat->batt_id].
 			battery_resistance +
@@ -1337,22 +1228,21 @@ static int ab8500_comp_fg_bat_voltage(struct ab8500_fg *di,
 			line_impedance;
 #endif
 	/* Use Ohms law to get the load compensated voltage */
-	vbat_comp = vbat - (di->inst_curr * bat_res_comp) / 1000;
+	vbat_comp = di->vbat - (di->inst_curr * bat_res_comp) / 1000;
 
 	dev_dbg(di->dev, "%s Measured Vbat: %dmV,Compensated Vbat %dmV, "
 		"R: %dmOhm, Current: %dmA Vbat Samples: %d\n",
-		__func__, vbat, vbat_comp,
+		__func__, di->vbat, vbat_comp,
 		bat_res_comp,
 		di->inst_curr, i);
-	pr_debug("[FG]TuningData:\t%d\t%d\t%d\t%d\t%d\n",
+	dev_dbg(di->dev, "[TuningData]\t%d\t%d\t%d\t%d\t%d\n",
 		DIV_ROUND_CLOSEST(di->bat_cap.permille, 10),
-		vbat, vbat_comp,
+		di->vbat, vbat_comp,
 		di->inst_curr, bat_res_comp);
 
 	di->vbat = vbat_comp;
 	return vbat_comp;
 }
-#endif /* CONFIG_SAMSUNG_CHARGER_SPEC */
 
 /**
  * ab8500_fg_volt_to_capacity() - Voltage based capacity
@@ -1393,6 +1283,7 @@ static int ab8500_fg_volt_to_capacity(struct ab8500_fg *di, int voltage)
 	return cap;
 }
 
+
 /**
  * ab8500_fg_uncomp_volt_to_capacity() - Uncompensated voltage based capacity
  * @di:		pointer to the ab8500_fg structure
@@ -1402,56 +1293,8 @@ static int ab8500_fg_volt_to_capacity(struct ab8500_fg *di, int voltage)
  */
 static int ab8500_fg_uncomp_volt_to_capacity(struct ab8500_fg *di)
 {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	di->vbat = ab8500_fg_bat_voltage(di, false);
-#else
-	di->vbat = ab8500_fg_bat_voltage(di);
-#endif
 	return ab8500_fg_volt_to_capacity(di, di->vbat);
-}
-
-/**
- * ab8500_fg_battery_resistance() - Returns the battery inner resistance
- * @di:		pointer to the ab8500_fg structure
- *
- * Returns battery inner resistance added with the fuel gauge resistor value
- * to get the total resistance in the whole link from gnd to bat+ node.
- */
-static int ab8500_fg_battery_resistance(struct ab8500_fg *di)
-{
-	int i, tbl_size;
-	struct batres_vs_temp *tbl;
-	int resist = 0;
-
-	tbl = di->bat->bat_type[di->bat->batt_id].batres_tbl;
-	tbl_size = di->bat->bat_type[di->bat->batt_id].n_batres_tbl_elements;
-
-	for (i = 0; i < tbl_size; ++i) {
-		if (di->bat_temp / 10 > tbl[i].temp)
-			break;
-	}
-
-	if ((i > 0) && (i < tbl_size)) {
-		resist = interpolate(di->bat_temp / 10,
-			tbl[i].temp,
-			tbl[i].resist,
-			tbl[i-1].temp,
-			tbl[i-1].resist);
-	} else if (i == 0) {
-		resist = tbl[0].resist;
-	} else {
-		resist = tbl[tbl_size - 1].resist;
-	}
-
-	dev_dbg(di->dev, "%s Temp: %d battery internal resistance: %d"
-		" fg resistance %d, total: %d (mOhm)\n",
-		__func__, di->bat_temp, resist, di->bat->fg_res / 10,
-		(di->bat->fg_res / 10) + resist);
-
-	/* fg_res variable is in 0.1mOhm */
-	resist += di->bat->fg_res / 10;
-
-	return resist;
 }
 
 /**
@@ -1462,48 +1305,16 @@ static int ab8500_fg_battery_resistance(struct ab8500_fg *di)
  * Returns battery capacity based on battery voltage that is load compensated
  * for the voltage drop
  */
-static int ab8500_fg_load_comp_volt_to_capacity(struct ab8500_fg *di
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-		,bool always)
-#else
-		)
-#endif
+static int ab8500_fg_load_comp_volt_to_capacity(struct ab8500_fg *di,
+		bool always)
 {
-	int vbat_comp = 0;
+	int vbat_ret = 0;
 
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	int res;
-	int i = 0;
-	int vbat = 0;
-#endif
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	vbat_comp = ab8500_comp_fg_bat_voltage(di, false);
-	if (vbat_comp == -1)
+	vbat_ret = ab8500_comp_fg_bat_voltage(di, always);
+	if (vbat_ret == -1)
 		return -1;
-#else
-	ab8500_fg_inst_curr_start(di);
 
-	do {
-		vbat += ab8500_fg_bat_voltage(di);
-		i++;
-		usleep_range(5000, 5001);
-	} while (!ab8500_fg_inst_curr_done(di));
-
-	ab8500_fg_inst_curr_finalize(di, &di->inst_curr);
-
-	di->vbat = vbat / i;
-	res = ab8500_fg_battery_resistance(di);
-
-	/* Use Ohms law to get the load compensated voltage */
-	vbat_comp = di->vbat - (di->inst_curr * res) / 1000;
-
-	dev_dbg(di->dev, "%s Measured Vbat: %dmV,Compensated Vbat %dmV, "
-		"R: %dmOhm, Current: %dmA Vbat Samples: %d\n",
-		__func__, di->vbat, vbat_comp, res, di->inst_curr, i);
-#endif
-
-	return ab8500_fg_volt_to_capacity(di, vbat_comp);
+	return ab8500_fg_volt_to_capacity(di, vbat_ret);
 }
 
 /**
@@ -1571,30 +1382,24 @@ static int ab8500_fg_calc_cap_charging(struct ab8500_fg *di)
 		di->bat_cap.mah += di->accu_charge;
 	else
 		di->bat_cap.mah = 0;
+
 	/*
-	 * We force capacity to 100% once when the algorithm
+	 * We force capacity to 100% as long as the algorithm
 	 * reports that it's full.
-	 */
+	*/
 	if (di->bat_cap.mah >= di->bat_cap.max_mah_design ||
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	    (!di->flags.chg_timed_out &&
 	     (di->flags.fully_charged || di->flags.fully_charged_1st))) {
-#else
-		di->flags.force_full) {
-#endif
 		di->bat_cap.mah = di->bat_cap.max_mah_design;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		di->max_cap_changed = true;
 	} else {
 		di->max_cap_changed = false;
-#endif
 	}
 
 	ab8500_fg_fill_cap_sample(di, di->bat_cap.mah);
 	di->bat_cap.permille =
 		ab8500_fg_convert_mah_to_permille(di, di->bat_cap.mah);
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 #ifdef USE_COMPENSATING_VOLTAGE_SAMPLE_FOR_CHARGING
 	if (di->bat_cap.permille > 900) {
 		di->n_skip_add_sample = 4;
@@ -1613,11 +1418,13 @@ static int ab8500_fg_calc_cap_charging(struct ab8500_fg *di)
 	} else if (di->bat_cap.permille <= 120) {
 		di->n_skip_add_sample = 1;
 	}
-	pr_info("[FG] Using every %d Vbat sample Now on %d loop\n",
+	dev_dbg(di->dev,
+		"[CHARGING] Using every %d Vbat sample Now on %d loop\n",
 		di->n_skip_add_sample, di->skip_add_sample);
 
 	if (++di->skip_add_sample >= di->n_skip_add_sample) {
-		pr_info("[FG] Adding voltage based samples to avg: %d\n",
+		dev_dbg(di->dev,
+			"[CHARGING] Adding voltage based samples to avg: %d\n",
 			di->vbat_cap.avg);
 		di->bat_cap.mah = ab8500_fg_add_cap_sample(di,
 			di->vbat_cap.avg);
@@ -1630,14 +1437,8 @@ static int ab8500_fg_calc_cap_charging(struct ab8500_fg *di)
 
 	/* We need to update battery voltage and inst current when charging */
 	di->vbat = ab8500_comp_fg_bat_voltage(di, true);
-	di->inst_curr = ab8500_fg_inst_curr_blocking(di);
+	di->inst_curr = ab8500_fg_inst_curr(di);
 #endif /*USE_COMPENSATING_VOLTAGE_SAMPLE_FOR_CHARGING*/
-
-#else /* CONFIG_SAMSUNG_CHARGER_SPEC */
-	/* We need to update battery voltage and inst current when charging */
-	di->vbat = ab8500_fg_bat_voltage(di);
-	di->inst_curr = ab8500_fg_inst_curr_blocking(di);
-#endif
 
 	return di->bat_cap.mah;
 }
@@ -1656,11 +1457,7 @@ static int ab8500_fg_calc_cap_discharge_voltage(struct ab8500_fg *di, bool comp)
 	int permille, mah;
 
 	if (comp)
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		permille = ab8500_fg_load_comp_volt_to_capacity(di, true);
-#else
-		permille = ab8500_fg_load_comp_volt_to_capacity(di);
-#endif
 	else
 		permille = ab8500_fg_uncomp_volt_to_capacity(di);
 
@@ -1683,17 +1480,13 @@ static int ab8500_fg_calc_cap_discharge_voltage(struct ab8500_fg *di, bool comp)
  */
 static int ab8500_fg_calc_cap_discharge_fg(struct ab8500_fg *di)
 {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	int permille, mah;
 	int diff_cap = 0;
-#else
-	int permille_volt, permille;
-#endif
 
 	dev_dbg(di->dev, "%s cap_mah %d accu_charge %d\n",
-		__func__,
-		di->bat_cap.mah,
-		di->accu_charge);
+	__func__,
+	di->bat_cap.mah,
+	di->accu_charge);
 
 	/* Capacity should not be less than 0 */
 	if (di->bat_cap.mah + di->accu_charge > 0)
@@ -1704,7 +1497,6 @@ static int ab8500_fg_calc_cap_discharge_fg(struct ab8500_fg *di)
 	if (di->bat_cap.mah >= di->bat_cap.max_mah_design)
 		di->bat_cap.mah = di->bat_cap.max_mah_design;
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	permille = ab8500_fg_convert_mah_to_permille(di, di->bat_cap.mah);
 	ab8500_fg_fill_cap_sample(di, di->bat_cap.mah);
 
@@ -1729,7 +1521,7 @@ static int ab8500_fg_calc_cap_discharge_fg(struct ab8500_fg *di)
 	} else if (di->bat_cap.permille <= 200 &&
 		di->bat_cap.permille > 100) {
 		di->n_skip_add_sample = 3;
-#if defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE) || defined(CONFIG_MACH_SEC_GOLDEN)  || defined(CONFIG_MACH_SEC_SKOMER)
+#if defined(CONFIG_MACH_CODINA)
 	} else if (di->bat_cap.permille <= 120) {
 		di->n_skip_add_sample = 1;
 	}
@@ -1738,21 +1530,23 @@ static int ab8500_fg_calc_cap_discharge_fg(struct ab8500_fg *di)
 		di->n_skip_add_sample = 2;
 	}
 #endif
-	pr_info("[FG]Using every %d Vbat sample Now on %d loop\n",
+	dev_dbg(di->dev, "Using every %d Vbat sample Now on %d loop\n",
 		di->n_skip_add_sample, di->skip_add_sample);
 
 	if (++di->skip_add_sample >= di->n_skip_add_sample) {
 		diff_cap = ab8500_fg_convert_mah_to_permille(di,
 		     ABS(di->vbat_cap.avg - di->avg_cap.avg));
-		pr_debug("[FG][CURR VAR] high_diff_nbr : %d\n",
+		dev_dbg(di->dev, "[CURR VAR] high_diff_nbr : %d\n",
 			di->inst_cur.high_diff_nbr);
 
-		pr_debug("[FG][DIFF CAP] FG_avg : %d, VB_avg : %d, diff_cap : %d\n",
+		dev_dbg(di->dev,
+			"[DIFF CAP] FG_avg : %d, VB_avg : %d, diff_cap : %d\n",
 			ab8500_fg_convert_mah_to_permille(di, di->avg_cap.avg),
 			ab8500_fg_convert_mah_to_permille(di, di->vbat_cap.avg),
 			DIV_ROUND_CLOSEST(diff_cap, 10));
 
-			pr_info("[FG]Adding voltage based samples to avg: %d\n",
+			dev_dbg(di->dev,
+				"Adding voltage based samples to avg: %d\n",
 				di->vbat_cap.avg);
 			di->bat_cap.mah = ab8500_fg_add_cap_sample(di,
 				di->vbat_cap.avg);
@@ -1761,31 +1555,6 @@ static int ab8500_fg_calc_cap_discharge_fg(struct ab8500_fg *di)
 	}
 	di->bat_cap.permille =
 		ab8500_fg_convert_mah_to_permille(di, di->bat_cap.mah);
-#else
-	/*
-	 * Check against voltage based capacity. It can not be lower
-	 * than what the uncompensated voltage says
-	 */
-	permille = ab8500_fg_convert_mah_to_permille(di, di->bat_cap.mah);
-	permille_volt = ab8500_fg_uncomp_volt_to_capacity(di);
-
-	if (permille < permille_volt) {
-		di->bat_cap.permille = permille_volt;
-		di->bat_cap.mah = ab8500_fg_convert_permille_to_mah(di,
-			di->bat_cap.permille);
-
-		dev_dbg(di->dev, "%s voltage based: perm %d perm_volt %d\n",
-			__func__,
-			permille,
-			permille_volt);
-
-		ab8500_fg_fill_cap_sample(di, di->bat_cap.mah);
-	} else {
-		ab8500_fg_fill_cap_sample(di, di->bat_cap.mah);
-		di->bat_cap.permille =
-			ab8500_fg_convert_mah_to_permille(di, di->bat_cap.mah);
-	}
-#endif
 
 	return di->bat_cap.mah;
 }
@@ -1800,12 +1569,7 @@ static int ab8500_fg_capacity_level(struct ab8500_fg *di)
 {
 	int ret, percent;
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	percent = DIV_ROUND_CLOSEST(di->bat_cap.permille, 10);
-#else
-	percent = di->bat_cap.permille / 10;
-#endif
-
 
 	if (percent <= di->bat->cap_levels->critical ||
 		di->flags.low_bat)
@@ -1823,99 +1587,6 @@ static int ab8500_fg_capacity_level(struct ab8500_fg *di)
 }
 
 /**
- * ab8500_fg_calculate_scaled_capacity() - Capacity scaling
- * @di:		pointer to the ab8500_fg structure
- *
- * Calculates the capacity to be shown to upper layers. Scales the capacity
- * to have 100% as a reference from the actual capacity upon removal of charger
- * when charging is in maintenance mode.
- */
-static int ab8500_fg_calculate_scaled_capacity(struct ab8500_fg *di)
-{
-	struct ab8500_fg_cap_scaling *cs = &di->bat_cap.cap_scale;
-	int capacity = di->bat_cap.prev_percent;
-
-	if (!cs->enable)
-		return capacity;
-
-	/*
-	 * As long as we are in fully charge mode scale the capacity
-	 * to show 100%.
-	 */
-	if (di->flags.fully_charged) {
-		cs->cap_to_scale[0] = 100;
-		cs->cap_to_scale[1] =
-			max(capacity, di->bat->fg_params->maint_thres);
-		dev_dbg(di->dev, "Scale cap with %d/%d\n",
-			 cs->cap_to_scale[0], cs->cap_to_scale[1]);
-	}
-
-	/* Calculates the scaled capacity. */
-	if ((cs->cap_to_scale[0] != cs->cap_to_scale[1])
-					&& (cs->cap_to_scale[1] > 0))
-		capacity = min(100,
-				 DIV_ROUND_CLOSEST(di->bat_cap.prev_percent *
-						 cs->cap_to_scale[0],
-						 cs->cap_to_scale[1]));
-
-	if (di->flags.charging) {
-		if (capacity < cs->disable_cap_level) {
-			cs->disable_cap_level = capacity;
-			dev_dbg(di->dev, "Cap to stop scale lowered %d%%\n",
-				cs->disable_cap_level);
-		} else if (!di->flags.fully_charged) {
-			if (di->bat_cap.prev_percent >=
-			    cs->disable_cap_level) {
-				dev_dbg(di->dev, "Disabling scaled capacity\n");
-				cs->enable = false;
-				capacity = di->bat_cap.prev_percent;
-			} else {
-				dev_dbg(di->dev,
-					"Waiting in cap to level %d%%\n",
-					cs->disable_cap_level);
-				capacity = cs->disable_cap_level;
-			}
-		}
-	}
-
-	return capacity;
-}
-
-/**
- * ab8500_fg_update_cap_scalers() - Capacity scaling
- * @di:		pointer to the ab8500_fg structure
- *
- * To be called when state change from charge<->discharge to update
- * the capacity scalers.
- */
-static void ab8500_fg_update_cap_scalers(struct ab8500_fg *di)
-{
-	struct ab8500_fg_cap_scaling *cs = &di->bat_cap.cap_scale;
-
-	if (!cs->enable)
-		return;
-	if (di->flags.charging) {
-		di->bat_cap.cap_scale.disable_cap_level =
-			di->bat_cap.cap_scale.scaled_cap;
-		dev_dbg(di->dev, "Cap to stop scale at charge %d%%\n",
-				di->bat_cap.cap_scale.disable_cap_level);
-	} else {
-		if (cs->scaled_cap != 100) {
-			cs->cap_to_scale[0] = cs->scaled_cap;
-			cs->cap_to_scale[1] = di->bat_cap.prev_percent;
-		} else {
-			cs->cap_to_scale[0] = 100;
-			cs->cap_to_scale[1] =
-				max(di->bat_cap.prev_percent,
-				    di->bat->fg_params->maint_thres);
-		}
-
-		dev_dbg(di->dev, "Cap to scale at discharge %d/%d\n",
-				cs->cap_to_scale[0], cs->cap_to_scale[1]);
-	}
-}
-
-/**
  * ab8500_fg_check_capacity_limits() - Check if capacity has changed
  * @di:		pointer to the ab8500_fg structure
  * @init:	capacity is allowed to go up in init mode
@@ -1926,9 +1597,7 @@ static void ab8500_fg_update_cap_scalers(struct ab8500_fg *di)
 static void ab8500_fg_check_capacity_limits(struct ab8500_fg *di, bool init)
 {
 	bool changed = false;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	int percent = DIV_ROUND_CLOSEST(di->bat_cap.permille, 10);
-#endif
 
 	di->bat_cap.level = ab8500_fg_capacity_level(di);
 
@@ -1952,10 +1621,10 @@ static void ab8500_fg_check_capacity_limits(struct ab8500_fg *di, bool init)
 		}
 	}
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	if (di->flags.low_bat) {
 		if (!di->lpm_chg_mode) {
-			if (percent <= 1  && di->vbat <= LOWBAT_ZERO_VOLTAGE) {
+			if (percent <= 1  &&
+			    di->vbat <= LOWBAT_ZERO_VOLTAGE && !changed) {
 				di->lowbat_poweroff = true;
 			} else if ((percent > 1 && !di->flags.charging) ||
 				   (percent <= 1 &&
@@ -1987,10 +1656,11 @@ static void ab8500_fg_check_capacity_limits(struct ab8500_fg *di, bool init)
 	}
 
 	if (di->lowbat_poweroff_locked) {
-		if (percent <= 1 && di->vbat <= LOWBAT_ZERO_VOLTAGE)
+		if (percent <= 1 && di->vbat <= LOWBAT_ZERO_VOLTAGE
+		    && !changed)
 			di->lowbat_poweroff = true;
 
-		if (di->vbat >= BAT_GOOD_VOLTAGE) {
+		if (di->vbat > 3450) {
 			dev_info(di->dev, "Low bat condition is recovered.\n");
 			di->lowbat_poweroff_locked = false;
 			wake_unlock(&di->lowbat_poweroff_wake_lock);
@@ -2006,13 +1676,11 @@ static void ab8500_fg_check_capacity_limits(struct ab8500_fg *di, bool init)
 		dev_info(di->dev, "Low bat interrupt occured, "
 			 "but we will ignore it in lpm\n");
 	}
-#endif
 
 	/*
 	 * If we have received the LOW_BAT IRQ, set capacity to 0 to initiate
 	 * shutdown
 	 */
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	if (di->lowbat_poweroff) {
 		dev_info(di->dev, "Battery low, set capacity to 0\n");
 		di->bat_cap.prev_percent = 0;
@@ -2056,104 +1724,10 @@ static void ab8500_fg_check_capacity_limits(struct ab8500_fg *di, bool init)
 				di->bat_cap.permille);
 		}
 	}
-#else
-	if (di->flags.low_bat) {
-		dev_dbg(di->dev, "Battery low, set capacity to 0\n");
-		di->bat_cap.prev_percent = 0;
-		di->bat_cap.permille = 0;
-		percent = 0;
-		di->bat_cap.prev_mah = 0;
-		di->bat_cap.mah = 0;
-		changed = true;
-	} else if (di->flags.fully_charged) {
-		/*
-		 * We report 100% if algorithm reported fully charged
-		 * and show 100% during maintenance charging (scaling).
-		 */
-		if (di->flags.force_full) {
-			di->bat_cap.prev_percent = percent;
-			di->bat_cap.prev_mah = di->bat_cap.mah;
 
-			changed = true;
-
-			if (!di->bat_cap.cap_scale.enable &&
-						di->bat->capacity_scaling) {
-				di->bat_cap.cap_scale.enable = true;
-				di->bat_cap.cap_scale.cap_to_scale[0] = 100;
-				di->bat_cap.cap_scale.cap_to_scale[1] =
-						di->bat_cap.prev_percent;
-				di->bat_cap.cap_scale.disable_cap_level = 100;
-			}
-		} else if (di->bat_cap.prev_percent != percent) {
-			dev_dbg(di->dev,
-				"battery reported full "
-				"but capacity dropping: %d\n",
-				percent);
-			di->bat_cap.prev_percent = percent;
-			di->bat_cap.prev_mah = di->bat_cap.mah;
-
-			changed = true;
-		}
-	} else if (di->bat_cap.prev_percent != percent) {
-		if (percent == 0) {
-			/*
-			 * We will not report 0% unless we've got
-			 * the LOW_BAT IRQ, no matter what the FG
-			 * algorithm says.
-			 */
-			di->bat_cap.prev_percent = 1;
-			di->bat_cap.permille = 1;
-			di->bat_cap.prev_mah = 1;
-			di->bat_cap.mah = 1;
-			percent = 1;
-
-			changed = true;
-		} else if (!(!di->flags.charging &&
-			percent > di->bat_cap.prev_percent) || init) {
-			/*
-			 * We do not allow reported capacity to go up
-			 * unless we're charging or if we're in init
-			 */
-			dev_dbg(di->dev,
-				"capacity changed from %d to %d (%d)\n",
-				di->bat_cap.prev_percent,
-				percent,
-				di->bat_cap.permille);
-			di->bat_cap.prev_percent = percent;
-			di->bat_cap.prev_mah = di->bat_cap.mah;
-
-			changed = true;
-		} else {
-			dev_dbg(di->dev, "capacity not allowed to go up since "
-				"no charger is connected: %d to %d (%d)\n",
-				di->bat_cap.prev_percent,
-				percent,
-				di->bat_cap.permille);
-		}
-	}
-#endif
-
-	if (changed) {
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-		if (di->bat->capacity_scaling) {
-			di->bat_cap.cap_scale.scaled_cap =
-				ab8500_fg_calculate_scaled_capacity(di);
-
-			dev_info(di->dev, "capacity=%d (%d)\n",
-				di->bat_cap.prev_percent,
-				di->bat_cap.cap_scale.scaled_cap);
-		}
-#endif
+	if (changed)
 		power_supply_changed(&di->fg_psy);
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-		if (di->flags.fully_charged && di->flags.force_full) {
-			dev_dbg(di->dev, "Battery full, notifying.\n");
-			di->flags.force_full = false;
-			sysfs_notify(&di->fg_kobject, NULL, "charge_full");
-		}
-		sysfs_notify(&di->fg_kobject, NULL, "charge_now");
-#endif
-	}
+
 }
 
 static void ab8500_fg_charge_state_to(struct ab8500_fg *di,
@@ -2205,13 +1779,11 @@ static void ab8500_fg_algorithm_charging(struct ab8500_fg *di)
 		ab8500_fg_charge_state_to(di, AB8500_FG_CHARGE_READOUT);
 
 		break;
-
 	case AB8500_FG_CHARGE_READOUT:
 		/*
 		 * Read the FG and calculate the new capacity
 		 */
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 #ifdef USE_COMPENSATING_VOLTAGE_SAMPLE_FOR_CHARGING
 		{
 			int mah, vbat_cap;
@@ -2221,13 +1793,13 @@ static void ab8500_fg_algorithm_charging(struct ab8500_fg *di)
 				mah = ab8500_fg_convert_permille_to_mah(di,
 							vbat_cap);
 				ab8500_fg_add_vcap_sample(di, mah);
-				pr_debug(
-				"[FG CHARGING]Average voltage based capacity is: "
+				dev_dbg(di->dev,
+				"[CHARGING]Average voltage based capacity is: "
 				"%d mah Now %d mah, [%d %%]\n",
 				di->vbat_cap.avg, mah, vbat_cap / 10);
 			} else
-				pr_debug(
-				"[FG CHARGING]Ignoring average "
+				dev_dbg(di->dev,
+				"[CHARGING]Ignoring average "
 				"voltage based capacity\n");
 		}
 #endif
@@ -2241,13 +1813,19 @@ static void ab8500_fg_algorithm_charging(struct ab8500_fg *di)
 		      di->flags.fully_charged_1st))) {
 			di->bat_cap.mah = di->bat_cap.max_mah_design;
 			di->max_cap_changed = true;
+
+			ab8500_fg_fill_cap_sample(di, di->bat_cap.mah);
+			di->bat_cap.permille =
+				ab8500_fg_convert_mah_to_permille(di,
+						  di->bat_cap.mah);
+			ab8500_fg_fill_vcap_sample(di,
+						   di->bat_cap.mah);
 		} else {
 			di->max_cap_changed = false;
 		}
-#endif
 
 		mutex_lock(&di->cc_lock);
-		if (!di->flags.conv_done && !di->flags.force_full) {
+		if (!di->flags.conv_done) {
 			/* Wasn't the CC IRQ that got us here */
 			mutex_unlock(&di->cc_lock);
 			dev_dbg(di->dev, "%s CC conv not done\n",
@@ -2268,56 +1846,6 @@ static void ab8500_fg_algorithm_charging(struct ab8500_fg *di)
 
 	/* Check capacity limits */
 	ab8500_fg_check_capacity_limits(di, false);
-}
-
-static void force_capacity(struct ab8500_fg *di)
-{
-	int cap;
-
-	ab8500_fg_clear_cap_samples(di);
-	cap = di->bat_cap.user_mah;
-	if (cap > di->bat_cap.max_mah_design) {
-		dev_dbg(di->dev, "Remaining cap %d can't be bigger than total"
-			" %d\n", cap, di->bat_cap.max_mah_design);
-		cap = di->bat_cap.max_mah_design;
-	}
-	ab8500_fg_fill_cap_sample(di, di->bat_cap.user_mah);
-	di->bat_cap.permille = ab8500_fg_convert_mah_to_permille(di, cap);
-	di->bat_cap.mah = cap;
-	ab8500_fg_check_capacity_limits(di, true);
-}
-
-static bool check_sysfs_capacity(struct ab8500_fg *di)
-{
-	int cap, lower, upper;
-	int cap_permille;
-
-	cap = di->bat_cap.user_mah;
-
-	cap_permille = ab8500_fg_convert_mah_to_permille(di,
-		di->bat_cap.user_mah);
-
-	lower = di->bat_cap.permille - di->bat->fg_params->user_cap_limit * 10;
-	upper = di->bat_cap.permille + di->bat->fg_params->user_cap_limit * 10;
-
-	if (lower < 0)
-		lower = 0;
-	/* 1000 is permille, -> 100 percent */
-	if (upper > 1000)
-		upper = 1000;
-
-	dev_dbg(di->dev, "Capacity limits:"
-		" (Lower: %d User: %d Upper: %d) [user: %d, was: %d]\n",
-		lower, cap_permille, upper, cap, di->bat_cap.mah);
-
-	/* If within limits, use the saved capacity and exit estimation...*/
-	if (cap_permille > lower && cap_permille < upper) {
-		dev_dbg(di->dev, "OK! Using users cap %d uAh now\n", cap);
-		force_capacity(di);
-		return true;
-	}
-	dev_dbg(di->dev, "Capacity from user out of limits, ignoring");
-	return false;
 }
 
 /**
@@ -2354,32 +1882,29 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 		sleep_time = di->bat->fg_params->init_timer;
 
 		/* Discard the first [x] seconds */
-		if (di->init_cnt > di->bat->fg_params->init_discard_time) {
-			ab8500_fg_calc_cap_discharge_voltage(di, true);
+		if (di->init_cnt >
+			di->bat->fg_params->init_discard_time) {
 
+			ab8500_fg_calc_cap_discharge_voltage(di, true);
 			ab8500_fg_check_capacity_limits(di, true);
 		}
 
 		di->init_cnt += sleep_time;
-		if (di->init_cnt > di->bat->fg_params->init_total_time) {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
+		if (di->init_cnt >
+			di->bat->fg_params->init_total_time) {
 			di->fg_samples = SEC_TO_SAMPLE(
 				di->bat->fg_params->accu_high_curr);
 
 			ab8500_fg_coulomb_counter(di, true);
-			pr_debug("[FG]Filling vcap with %d mah, avg was %d\n",
-					di->bat_cap.mah, di->vbat_cap.avg);
+			dev_dbg(di->dev,
+				"Filling vcap with %d mah, avg was %d\n",
+				di->bat_cap.mah, di->vbat_cap.avg);
 			ab8500_fg_fill_vcap_sample(di, di->bat_cap.mah);
-			di->inst_curr = ab8500_fg_inst_curr_blocking(di);
+			di->inst_curr = ab8500_fg_inst_curr(di);
 			ab8500_fg_fill_i_sample(di, di->inst_curr);
 
 			ab8500_fg_discharge_state_to(di,
 				AB8500_FG_DISCHARGE_READOUT);
-#else
-
-			ab8500_fg_discharge_state_to(di,
-				AB8500_FG_DISCHARGE_READOUT_INIT);
-#endif
 		}
 
 		break;
@@ -2401,7 +1926,7 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 		 * RECOVERY_SLEEP if time left.
 		 * If high, go to READOUT
 		 */
-		di->inst_curr = ab8500_fg_inst_curr_blocking(di);
+		di->inst_curr = ab8500_fg_inst_curr(di);
 
 		if (ab8500_fg_is_low_curr(di, di->inst_curr)) {
 			if (di->recovery_cnt >
@@ -2425,19 +1950,12 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 			ab8500_fg_discharge_state_to(di,
 				AB8500_FG_DISCHARGE_READOUT);
 		}
-		break;
 
-	case AB8500_FG_DISCHARGE_READOUT_INIT:
-		di->fg_samples = SEC_TO_SAMPLE(
-			di->bat->fg_params->accu_high_curr);
-		ab8500_fg_coulomb_counter(di, true);
-		ab8500_fg_discharge_state_to(di,
-				AB8500_FG_DISCHARGE_READOUT);
 		break;
 
 	case AB8500_FG_DISCHARGE_READOUT:
-		di->inst_curr = ab8500_fg_inst_curr_blocking(di);
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
+		di->inst_curr = ab8500_fg_inst_curr(di);
+
 		{
 			int mah, vbat_cap;
 			vbat_cap = ab8500_fg_load_comp_volt_to_capacity(di,
@@ -2446,13 +1964,15 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 				mah = ab8500_fg_convert_permille_to_mah(di,
 						vbat_cap);
 				ab8500_fg_add_vcap_sample(di, mah);
-				pr_debug("[FG]Average voltage based capacity is: "
-						"%d mah Now %d mah, [%d %%]\n",
+				dev_dbg(di->dev,
+					"Average voltage based capacity is: "
+					"%d mah Now %d mah, [%d %%]\n",
 					di->vbat_cap.avg, mah, vbat_cap / 10);
 			} else
-				pr_info("[FG]Ignoring average voltage based capacity\n");
+				dev_dbg(di->dev,
+					"Ignoring average voltage"
+					" based capacity\n");
 		}
-#endif
 
 		if (ab8500_fg_is_low_curr(di, di->inst_curr)) {
 			/* Detect mode change */
@@ -2466,7 +1986,8 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 					AB8500_FG_DISCHARGE_RECOVERY);
 
 				queue_delayed_work(di->fg_wq,
-					&di->fg_periodic_work, 0);
+					&di->fg_periodic_work,
+					0);
 
 				break;
 			}
@@ -2502,7 +2023,7 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 
 		ab8500_fg_check_capacity_limits(di, false);
 
-#if defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE) || defined(CONFIG_MACH_SEC_GOLDEN) || defined(CONFIG_MACH_SEC_SKOMER)
+#if defined(CONFIG_MACH_CODINA)
 		if (DIV_ROUND_CLOSEST(di->bat_cap.permille, 10) <= 10) {
 			queue_delayed_work(di->fg_wq,
 				&di->fg_periodic_work,
@@ -2513,16 +2034,15 @@ static void ab8500_fg_algorithm_discharging(struct ab8500_fg *di)
 
 	case AB8500_FG_DISCHARGE_WAKEUP:
 		ab8500_fg_coulomb_counter(di, true);
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-		di->inst_curr = ab8500_fg_inst_curr_blocking(di);
-#endif
+		di->inst_curr = ab8500_fg_inst_curr(di);
+
 		ab8500_fg_calc_cap_discharge_voltage(di, true);
 
 		di->fg_samples = SEC_TO_SAMPLE(
 			di->bat->fg_params->accu_high_curr);
+		/* Re-program number of samples set above */
 		ab8500_fg_coulomb_counter(di, true);
-		ab8500_fg_discharge_state_to(di,
-				AB8500_FG_DISCHARGE_READOUT);
+		ab8500_fg_discharge_state_to(di, AB8500_FG_DISCHARGE_READOUT);
 
 		ab8500_fg_check_capacity_limits(di, false);
 
@@ -2583,10 +2103,10 @@ err:
 	queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
 }
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
+
 static void ab8500_init_columbcounter(struct ab8500_fg *di)
 {
-	int ret;
+	int ret = 0;
 	u8 reg_val;
 
 	mutex_lock(&di->cc_lock);
@@ -2609,13 +2129,13 @@ static void ab8500_init_columbcounter(struct ab8500_fg *di)
 	}
 
 	mutex_unlock(&di->cc_lock);
-	return ;
+	return ret;
 
 inst_curr_err:
 	dev_err(di->dev, "%s initializing Coulomb Coulomb is failed\n",
 		__func__);
 	mutex_unlock(&di->cc_lock);
-	return ;
+	return ret;
 }
 
 
@@ -2691,7 +2211,24 @@ static int ab8500_fg_reenable_charging(struct ab8500_fg *di)
 
 	return 0;
 }
-#endif
+
+static void ab8500_fg_read_input_current_reg(struct ab8500_fg *di)
+{
+	int ret;
+	u8 reg;
+
+	ret = abx500_get_register_interruptible(di->dev,
+					  AB8500_CHARGER,
+					  AB8500_MCH_IPT_CURLVL_REG,
+					  &reg);
+	if (ret < 0) {
+		dev_err(di->dev, "%s ab8500 read failed\n", __func__);
+		di->input_curr_reg = 0;
+		return;
+	}
+
+	di->input_curr_reg = (int)reg;
+}
 
 /**
  * ab8500_fg_algorithm() - Entry point for the FG algorithm
@@ -2703,32 +2240,26 @@ static void ab8500_fg_algorithm(struct ab8500_fg *di)
 {
 
 	if (di->flags.calibrate) {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		ab8500_init_columbcounter(di);
-#endif
 		ab8500_fg_algorithm_calibrate(di);
 	} else {
 		if (di->flags.charging) {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 			di->bat->fg_res = di->fg_res_chg;
-#endif
 			ab8500_fg_algorithm_charging(di);
+			ab8500_fg_read_input_current_reg(di);
 		} else {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 			di->bat->fg_res = di->fg_res_dischg;
-#endif
 			ab8500_fg_algorithm_discharging(di);
 		}
 	}
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	ab8500_fg_reenable_charging(di);
 
-	if(di->discharge_state != AB8500_FG_DISCHARGE_INITMEASURING)
+	if (di->discharge_state != AB8500_FG_DISCHARGE_INITMEASURING)
 		pr_info("[FG_DATA] %dmAh/%dmAh %d%% (Prev %dmAh %d%%) %dmV %d "
 			"%d %dmA "
-			"%dmA %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d "
-			"%d %d %d %d %d %d %d\n",
+			"%dmA %d %d %d %d %d %d %d %d %d %d %d %d %d "
+			"%d %d %d %d %d %x %d\n",
 			di->bat_cap.mah/1000,
 			di->bat_cap.max_mah_design/1000,
 			DIV_ROUND_CLOSEST(di->bat_cap.permille, 10),
@@ -2754,33 +2285,11 @@ static void ab8500_fg_algorithm(struct ab8500_fg *di)
 			di->flags.fully_charged,
 			di->flags.fully_charged_1st,
 			di->bat->batt_res,
-			di->gpadc_vbat_gain,
-			di->gpadc_vbat_offset,
-			di->gpadc_vbat_ideal,
 			di->smd_on,
 			di->max_cap_changed,
 			di->flags.chg_timed_out,
+			di->input_curr_reg,
 			di->reenable_charing);
-#else
-	dev_dbg(di->dev, "[FG_DATA] %d %d %d %d %d %d %d %d %d "
-		"%d %d %d %d %d %d %d\n",
-		di->bat_cap.max_mah_design,
-		di->bat_cap.mah,
-		di->bat_cap.permille,
-		di->bat_cap.level,
-		di->bat_cap.prev_mah,
-		di->bat_cap.prev_percent,
-		di->bat_cap.prev_level,
-		di->vbat,
-		di->inst_curr,
-		di->avg_curr,
-		di->accu_charge,
-		di->flags.charging,
-		di->charge_state,
-		di->discharge_state,
-		di->high_curr_mode,
-		di->recovery_needed);
-#endif
 }
 
 /**
@@ -2795,130 +2304,18 @@ static void ab8500_fg_periodic_work(struct work_struct *work)
 		fg_periodic_work.work);
 
 	if (di->init_capacity) {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		/* A dummy read that will return 0 */
-		di->inst_curr = ab8500_fg_inst_curr_blocking(di);
-
+		di->inst_curr = ab8500_fg_inst_curr(di);
 		if (!di->flags.charging)
 			ab8500_fg_fill_i_sample(di, di->inst_curr);
-#endif
 		/* Get an initial capacity calculation */
 		ab8500_fg_calc_cap_discharge_voltage(di, true);
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		ab8500_fg_fill_vcap_sample(di, di->bat_cap.mah);
-#endif
 		ab8500_fg_check_capacity_limits(di, true);
 		di->init_capacity = false;
-
 		queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	} else if (di->flags.user_cap) {
-		if (check_sysfs_capacity(di)) {
-			ab8500_fg_check_capacity_limits(di, true);
-			if (di->flags.charging)
-				ab8500_fg_charge_state_to(di,
-					AB8500_FG_CHARGE_INIT);
-			else
-				ab8500_fg_discharge_state_to(di,
-					AB8500_FG_DISCHARGE_READOUT_INIT);
-		}
-		di->flags.user_cap = false;
-		queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
-#endif
 	} else
 		ab8500_fg_algorithm(di);
-
-}
-
-/**
- * ab8500_fg_check_hw_failure_work() - Check OVV_BAT condition
- * @work:	pointer to the work_struct structure
- *
- * Work queue function for checking the OVV_BAT condition
- */
-static void ab8500_fg_check_hw_failure_work(struct work_struct *work)
-{
-	int ret;
-	u8 reg_value;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	u8 reg_value2;
-	static u8 firstpass;
-#endif
-
-	struct ab8500_fg *di = container_of(work, struct ab8500_fg,
-		fg_check_hw_failure_work.work);
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	ret = abx500_get_register_interruptible(di->dev,
-		AB8500_CHARGER, AB8500_CH_STAT_REG,
-		&reg_value);
-	if (ret < 0) {
-		dev_err(di->dev, "ab8500 read failed %d\n", __LINE__);
-		return;
-	}
-
-	ret = abx500_get_register_interruptible(di->dev,
-		AB8500_CHARGER, AB8500_CH_USBCH_STAT1_REG,
-		&reg_value2);
-	if (ret < 0) {
-		dev_err(di->dev, "ab8500 read failed %d\n", __LINE__);
-		return;
-	}
-
-	pr_info("[FG]%s ch_stat=%d, usbch_stat1=%d\n", __func__, reg_value, reg_value2);
-
-	/*
-	 * If either BATT OVV OR (USB charger no longer on AND not firstpass.
-	 * This is to cope with transient changes in VBATT > OVV Threshold as
-	 * the BATT_OVV bit is cleared.
-	 */
-	if ((reg_value & BATT_OVV) || (!(reg_value2 & USBCH_ON) && !firstpass)){
-		/*Set BATT_OVV as we must have come here as a result of BATT_OVV interrupt initially*/
-		di->flags.bat_ovv = true;
-		firstpass = true;
-		power_supply_changed(&di->fg_psy);
-	}else{
-		dev_dbg(di->dev, "Battery recovered from OVV\n");
-		di->flags.bat_ovv = false;
-		firstpass = false;
-		power_supply_changed(&di->fg_psy);
-		return;
-	}
-
-	/*
-	 * Not yet recovered from ovv, reschedule test with time for
-	 * ChargAlg to pickup change of state and handle the fact that
-	 * the HW charger block is turned off!
-	 */
-	queue_delayed_work(di->fg_wq, &di->fg_check_hw_failure_work,
-			   round_jiffies((di->bat->interval_charging*HZ)+1));
-#else
-	/*
-	 * If we have had a battery over-voltage situation,
-	 * check ovv-bit to see if it should be reset.
-	 */
-	ret = abx500_get_register_interruptible(di->dev,
-		AB8500_CHARGER, AB8500_CH_STAT_REG,
-		&reg_value);
-	if (ret < 0) {
-		dev_err(di->dev, "%s ab8500 read failed\n", __func__);
-		return;
-	}
-	if ((reg_value & BATT_OVV) == BATT_OVV) {
-		if (!di->flags.bat_ovv) {
-			dev_dbg(di->dev, "Battery OVV\n");
-			di->flags.bat_ovv = true;
-			power_supply_changed(&di->fg_psy);
-		}
-		/* Not yet recovered from ovv, reschedule this test */
-		queue_delayed_work(di->fg_wq, &di->fg_check_hw_failure_work,
-			HZ);
-		} else {
-			dev_dbg(di->dev, "Battery recovered from OVV\n");
-			di->flags.bat_ovv = false;
-			power_supply_changed(&di->fg_psy);
-	}
-#endif
 }
 
 /**
@@ -2934,103 +2331,29 @@ static void ab8500_fg_low_bat_work(struct work_struct *work)
 	struct ab8500_fg *di = container_of(work, struct ab8500_fg,
 		fg_low_bat_work.work);
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	vbat = ab8500_comp_fg_bat_voltage(di, true);
-#else
-	vbat = ab8500_fg_bat_voltage(di);
-#endif
 
 	/* Check if LOW_BAT still fulfilled */
-	if (vbat < di->bat->fg_params->lowbat_threshold
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	    + LOWBAT_TOLERANCE
-#endif
-	    ) {
-		/* Is it time to shut down? */
-		if (di->low_bat_cnt < 1) {
-			di->flags.low_bat = true;
-			dev_warn(di->dev, "Shut down pending...\n");
-		} else {
-			/*
-			* Else we need to re-schedule this check to be able to detect
-			* if the voltage increases again during charging or
-			* due to decreasing load.
-			*/
-			di->low_bat_cnt--;
-			dev_warn(di->dev, "Battery voltage still LOW\n");
+	if (vbat < di->bat->fg_params->lowbat_threshold + LOWBAT_TOLERANCE) {
+		di->flags.low_bat = true;
+		dev_warn(di->dev, "Battery voltage still LOW\n");
+
+		/*
+		 * We need to re-schedule this check to be able to detect
+		 * if the voltage increases again during charging
+		 */
 		queue_delayed_work(di->fg_wq, &di->fg_low_bat_work,
 			round_jiffies(LOW_BAT_CHECK_INTERVAL));
-		}
 	} else {
-		di->flags.low_bat_delay = false;
-		di->low_bat_cnt = 10;
+		di->flags.low_bat = false;
 		dev_warn(di->dev, "Battery voltage OK again\n");
 	}
 
 	/* This is needed to dispatch LOW_BAT */
 	ab8500_fg_check_capacity_limits(di, false);
-}
 
-/**
- * ab8500_fg_battok_calc - calculate the bit pattern corresponding
- * to the target voltage.
- * @di:       pointer to the ab8500_fg structure
- * @target    target voltage
- *
- * Returns bit pattern closest to the target voltage
- * valid return values are 0-14. (0-BATT_OK_MAX_NR_INCREMENTS)
- */
-
-static int ab8500_fg_battok_calc(struct ab8500_fg *di, int target)
-{
-	if (target > BATT_OK_MIN +
-		(BATT_OK_INCREMENT * BATT_OK_MAX_NR_INCREMENTS))
-		return BATT_OK_MAX_NR_INCREMENTS;
-	if (target < BATT_OK_MIN)
-		return 0;
-	return (target - BATT_OK_MIN) / BATT_OK_INCREMENT;
-}
-
-/**
- * ab8500_fg_battok_init_hw_register - init battok levels
- * @di:       pointer to the ab8500_fg structure
- *
- */
-
-static int ab8500_fg_battok_init_hw_register(struct ab8500_fg *di)
-{
-	int selected;
-	int sel0;
-	int sel1;
-	int cbp_sel0;
-	int cbp_sel1;
-	int ret;
-	int new_val;
-
-	sel0 = di->bat->fg_params->battok_falling_th_sel0;
-	sel1 = di->bat->fg_params->battok_raising_th_sel1;
-
-	cbp_sel0 = ab8500_fg_battok_calc(di, sel0);
-	cbp_sel1 = ab8500_fg_battok_calc(di, sel1);
-
-	selected = BATT_OK_MIN + cbp_sel0 * BATT_OK_INCREMENT;
-
-	if (selected != sel0)
-		dev_warn(di->dev, "Invalid voltage step:%d, using %d %d\n",
-			sel0, selected, cbp_sel0);
-
-	selected = BATT_OK_MIN + cbp_sel1 * BATT_OK_INCREMENT;
-
-	if (selected != sel1)
-		dev_warn(di->dev, "Invalid voltage step:%d, using %d %d\n",
-			sel1, selected, cbp_sel1);
-
-	new_val = cbp_sel0 | (cbp_sel1 << 4);
-
-	dev_dbg(di->dev, "using: %x %d %d\n", new_val, cbp_sel0, cbp_sel1);
-	ret = abx500_set_register_interruptible(di->dev, AB8500_SYS_CTRL2_BLOCK,
-		AB8500_BATT_OK_REG, new_val);
-	return ret;
+	/* Set this flag to check if LOW_BAT IRQ still occurs */
+	di->flags.low_bat_delay = false;
 }
 
 /**
@@ -3056,13 +2379,7 @@ static void ab8500_fg_instant_work(struct work_struct *work)
 static irqreturn_t ab8500_fg_cc_data_end_handler(int irq, void *_di)
 {
 	struct ab8500_fg *di = _di;
-	if (!di->nbr_cceoc_irq_cnt) {
-		di->nbr_cceoc_irq_cnt++;
-		complete(&di->ab8500_fg_started);
-	} else {
-		di->nbr_cceoc_irq_cnt = 0;
-		complete(&di->ab8500_fg_complete);
-	}
+	complete(&di->ab8500_fg_complete);
 	return IRQ_HANDLED;
 }
 
@@ -3081,6 +2398,31 @@ static irqreturn_t ab8500_fg_cc_int_calib_handler(int irq, void *_di)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t ab8500_battery_over_voltage_handler(int irq, void *_di)
+{
+	/* struct ab8500_btemp *di = _di; */
+
+	/*
+	  Sometimes battery ovv interrupt occur in the below 4.3V
+	  even though ovv threshold is 4.75V
+	  So, We igonre this interrupt.
+	  AB8500 charger supports CV charging,
+	  so battery voltage is maintained below the voltage
+	  which is set in the ChVoltLevel(0x0B40) register.
+	*/
+
+	/*
+	  di->events.battery_ovv = true;
+	  di->events.battery_ovv_time = jiffies ;
+	  queue_work(di->btemp_wq,&di->battery_over_voltage_work);
+	*/
+
+	struct ab8500_fg *di = _di;
+
+	dev_info(di->dev, "Battery over voltage interrupt seen\n");
+	return IRQ_HANDLED;
+}
+
 /**
  * ab8500_fg_cc_convend_handler() - isr to get battery avg current.
  * @irq:       interrupt number
@@ -3092,42 +2434,12 @@ static irqreturn_t ab8500_fg_cc_convend_handler(int irq, void *_di)
 {
 	struct ab8500_fg *di = _di;
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	wake_lock_timeout(&di->cc_wake_lock, HZ*2);
-#endif
 	queue_work(di->fg_wq, &di->fg_acc_cur_work);
 
 	return IRQ_HANDLED;
 }
 
-/**
- * ab8500_fg_batt_ovv_handler() - Battery OVV occured
- * @irq:       interrupt number
- * @_di:       pointer to the ab8500_fg structure
- *
- * Returns IRQ status(IRQ_HANDLED)
- */
-static irqreturn_t ab8500_fg_batt_ovv_handler(int irq, void *_di)
-{
-	struct ab8500_fg *di = _di;
-
-	dev_crit(di->dev, "Battery OVV\n");
-
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-	di->flags.bat_ovv = true;
-
-	power_supply_changed(&di->fg_psy);
-
-	/* Schedule a new HW failure check */
-	queue_delayed_work(di->fg_wq, &di->fg_check_hw_failure_work, 0);
-#else
-
-	/* Schedule a new HW failure check */
-	queue_delayed_work(di->fg_wq, &di->fg_check_hw_failure_work, 0);
-#endif
-
-	return IRQ_HANDLED;
-}
 
 /**
  * ab8500_fg_lowbatf_handler() - Battery voltage is below LOW threshold
@@ -3140,11 +2452,8 @@ static irqreturn_t ab8500_fg_lowbatf_handler(int irq, void *_di)
 {
 	struct ab8500_fg *di = _di;
 
-	/* Initiate handling in ab8500_fg_low_bat_work() if not already initiated. */
 	if (!di->flags.low_bat_delay) {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		wake_lock_timeout(&di->lowbat_wake_lock, 20 * HZ);
-#endif
 		dev_warn(di->dev, "Battery voltage is below LOW threshold\n");
 		di->flags.low_bat_delay = true;
 		/*
@@ -3192,10 +2501,7 @@ static int ab8500_fg_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		if (di->flags.bat_ovv)
-			val->intval = BATT_OVV_VALUE * 1000;
-		else
-			val->intval = di->vbat * 1000;
+		val->intval = di->vbat * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
@@ -3217,11 +2523,7 @@ static int ab8500_fg_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
-		if (di->flags.batt_unknown && !di->bat->chg_unknown_bat
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-				&& di->flags.batt_id_received
-#endif
-				)
+		if (di->flags.batt_unknown && !di->bat->chg_unknown_bat)
 			val->intval = ab8500_fg_convert_mah_to_uwh(di,
 					di->bat_cap.max_mah);
 		else
@@ -3236,16 +2538,15 @@ static int ab8500_fg_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 		val->intval = di->bat_cap.max_mah;
 		break;
+
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
-		if (di->flags.batt_unknown && !di->bat->chg_unknown_bat &&
-				di->flags.batt_id_received)
+		if (di->flags.batt_unknown && !di->bat->chg_unknown_bat)
 			val->intval = di->bat_cap.max_mah;
 		else
 			val->intval = di->bat_cap.prev_mah;
 		break;
+
 	case POWER_SUPPLY_PROP_CAPACITY:
-		
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		if (di->flags.fully_charged || di->flags.chg_timed_out)
 			/* Unknown Battery or Full charged */
 			val->intval = 100;
@@ -3253,40 +2554,28 @@ static int ab8500_fg_get_property(struct power_supply *psy,
 			val->intval = 100;
 		else if (di->flags.charging && di->bat_cap.prev_percent == 100)
 			val->intval = 99;
-#else
-		if (di->bat->capacity_scaling)
-			val->intval = di->bat_cap.cap_scale.scaled_cap;
-		else if (di->flags.batt_unknown && !di->bat->chg_unknown_bat &&
-				di->flags.batt_id_received)
-			val->intval = 100;
-#endif
 		else
 			val->intval = di->bat_cap.prev_percent;
 		break;
+
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		if (di->flags.batt_unknown && !di->bat->chg_unknown_bat
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-				&& di->flags.batt_id_received
-#endif
-				)
+		if (di->flags.batt_unknown && !di->bat->chg_unknown_bat)
 			val->intval = POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
 		else
 			val->intval = di->bat_cap.prev_level;
 		break;
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	/* Instantaneous vbat ADC value */
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		(void)ab8500_fg_bat_voltage(di, false);
+		di->vbat = ab8500_fg_bat_voltage(di, false);
 		val->intval = di->vbat_adc;
 		break;
 
 	/* Instantaneous vbat voltage value */
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN:
-
-		val->intval = ab8500_fg_bat_voltage(di, false) * 1000;
+		di->vbat = ab8500_fg_bat_voltage(di, false);
+		val->intval = di->vbat * 1000;
 		break;
-#endif
 
 	default:
 		return -EINVAL;
@@ -3327,8 +2616,10 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 		if (ext->get_property(ext, prop, &ret))
 			continue;
 
+		if (ext->type == POWER_SUPPLY_TYPE_MAINS)
+			continue;
+
 		switch (prop) {
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		case POWER_SUPPLY_PROP_LPM_MODE:
 			/* LPM_MODE */
 			if (ret.intval)
@@ -3341,13 +2632,8 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 		case POWER_SUPPLY_PROP_REINIT_CAPACITY:
 		/* Re-initialize battery capacity */
 			if (ret.intval && di->reinit_capacity) {
-				if (di->lpm_chg_mode)
-					queue_delayed_work(di->fg_wq,
-					&di->fg_reinit_param_work, 2*HZ);
-				else
-					queue_delayed_work(di->fg_wq,
-					&di->fg_reinit_param_work, 5*HZ);
-
+				queue_delayed_work(di->fg_wq,
+				   &di->fg_reinit_param_work, 0);
 				di->reinit_capacity = false;
 			}
 
@@ -3368,8 +2654,6 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 				di->flags.fully_charged_1st = ret.intval;
 				queue_work(di->fg_wq, &di->fg_work);
 				break;
-			default:
-				break;
 			}
 			break;
 
@@ -3379,11 +2663,8 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 			case POWER_SUPPLY_TYPE_BATTERY:
 				di->flags.chg_timed_out = ret.intval;
 				break;
-			default:
-				break;
 			}
 			break;
-#endif
 
 		case POWER_SUPPLY_PROP_STATUS:
 			switch (ext->type) {
@@ -3396,35 +2677,20 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 						break;
 					di->flags.charging = false;
 					di->flags.fully_charged = false;
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 					di->flags.fully_charged_1st = false;
-#else
-					if (di->bat->capacity_scaling)
-						ab8500_fg_update_cap_scalers(di);
-#endif
 					queue_work(di->fg_wq, &di->fg_work);
 					break;
 				case POWER_SUPPLY_STATUS_FULL:
 					if (di->flags.fully_charged)
 						break;
 					di->flags.fully_charged = true;
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-					di->flags.force_full = true;
-					/* Save current capacity as maximum */
-					di->bat_cap.max_mah = di->bat_cap.mah;
-#endif
 					queue_work(di->fg_wq, &di->fg_work);
 					break;
 				case POWER_SUPPLY_STATUS_CHARGING:
-					if (di->flags.charging &&
-						!di->flags.fully_charged)
+					if (di->flags.charging)
 						break;
 					di->flags.charging = true;
 					di->flags.fully_charged = false;
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-					if (di->bat->capacity_scaling)
-						ab8500_fg_update_cap_scalers(di);
-#endif
 					queue_work(di->fg_wq, &di->fg_work);
 					break;
 				};
@@ -3436,24 +2702,6 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 		case POWER_SUPPLY_PROP_TECHNOLOGY:
 			switch (ext->type) {
 			case POWER_SUPPLY_TYPE_BATTERY:
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-				if (!di->flags.batt_id_received) {
-					const struct battery_type *b;
-					b = &(di->bat->bat_type[di->bat->batt_id]);
-
-					di->flags.batt_id_received = true;
-
-					di->bat_cap.max_mah_design =
-						MILLI_TO_MICRO *
-						b->charge_full_design;
-
-					di->bat_cap.max_mah =
-						di->bat_cap.max_mah_design;
-
-					di->vbat_nom = b->nominal_voltage;
-				}
-#endif
-
 				if (ret.intval)
 					di->flags.batt_unknown = false;
 				else
@@ -3463,23 +2711,12 @@ static int ab8500_fg_get_ext_psy_data(struct device *dev, void *data)
 				break;
 			}
 			break;
-#if !defined( CONFIG_SAMSUNG_CHARGER_SPEC )
-		case POWER_SUPPLY_PROP_TEMP:
-			switch (ext->type) {
-			case POWER_SUPPLY_TYPE_BATTERY:
-				if (di->flags.batt_id_received)
-					di->bat_temp = ret.intval;
-				break;
-			default:
-				break;
-			}
-			break;
-#endif
 
 		default:
 			break;
 		}
 	}
+
 	return 0;
 }
 
@@ -3493,25 +2730,13 @@ static int ab8500_fg_init_hw_registers(struct ab8500_fg *di)
 {
 	int ret;
 
-	/* Set VBAT OVV threshold */
-	ret = abx500_mask_and_set_register_interruptible(di->dev,
+	/* Set up VBAT OVV register */
+	ret = abx500_set_register_interruptible(di->dev,
 		AB8500_CHARGER,
 		AB8500_BATT_OVV,
-		BATT_OVV_TH_4P75,
-		BATT_OVV_TH_4P75);
+		(BATT_OVV_ENA | BATT_OVV_TH_4P75));
 	if (ret) {
 		dev_err(di->dev, "failed to set BATT_OVV\n");
-		goto out;
-	}
-
-	/* Enable VBAT OVV detection */
-	ret = abx500_mask_and_set_register_interruptible(di->dev,
-		AB8500_CHARGER,
-		AB8500_BATT_OVV,
-		BATT_OVV_ENA,
-		BATT_OVV_ENA);
-	if (ret) {
-		dev_err(di->dev, "failed to enable BATT_OVV\n");
 		goto out;
 	}
 
@@ -3527,17 +2752,10 @@ static int ab8500_fg_init_hw_registers(struct ab8500_fg *di)
 		goto out;
 	}
 
-	/* Battery OK threshold */
-	ret = ab8500_fg_battok_init_hw_register(di);
-	if (ret) {
-		dev_err(di->dev, "BattOk init write failed.\n");
-		goto out;
-	}
 out:
 	return ret;
 }
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 static int ab8500_fg_read_battery_capacity(struct ab8500_fg *di)
 {
 	struct file *filp;
@@ -3608,7 +2826,6 @@ static int ab8500_fg_write_battery_capacity(struct ab8500_fg *di, int value)
 
 	return ret;
 }
-#endif
 
 /**
  * ab8500_fg_external_power_changed() - callback for power supply changes
@@ -3627,7 +2844,6 @@ static void ab8500_fg_external_power_changed(struct power_supply *psy)
 		&di->fg_psy, ab8500_fg_get_ext_psy_data);
 }
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 static void ab8500_fg_reinit_param_work(struct work_struct *work)
 {
 	struct ab8500_fg *di = container_of(work, struct ab8500_fg,
@@ -3641,7 +2857,7 @@ static void ab8500_fg_reinit_param_work(struct work_struct *work)
 	int delta, mah = 0;
 	int valid_range = 0;
 	int offset_null = -1;
-	u8 switchoff_status = 0;
+	int switchoff_status = 0;
 	bool reset_state = false;
 
 	int ret;
@@ -3747,7 +2963,7 @@ static void ab8500_fg_reinit_param_work(struct work_struct *work)
 		ab8500_fg_convert_mah_to_permille(di, di->bat_cap.mah);
 		ab8500_fg_fill_vcap_sample(di, di->bat_cap.mah);
 		if (!di->flags.charging) {
-			di->inst_curr = ab8500_fg_inst_curr_blocking(di);
+			di->inst_curr = ab8500_fg_inst_curr(di);
 			ab8500_fg_fill_i_sample(di, di->inst_curr);
 		}
 		ab8500_fg_charge_state_to(di, AB8500_FG_CHARGE_INIT);
@@ -3761,16 +2977,8 @@ static void ab8500_fg_reinit_param_work(struct work_struct *work)
 		di->prev_capacity = new_capacity;
 	}
 }
-#endif
 
-/**
- * abab8500_fg_reinit_work() - work to reset the FG algorithm
- * @work:	pointer to the work_struct structure
- *
- * Used to reset the current battery capacity to be able to
- * retrigger a new voltage base capacity calculation. For
- * test and verification purpose.
- */
+
 static void ab8500_fg_reinit_work(struct work_struct *work)
 {
 	struct ab8500_fg *di = container_of(work, struct ab8500_fg,
@@ -3780,15 +2988,11 @@ static void ab8500_fg_reinit_work(struct work_struct *work)
 		dev_dbg(di->dev, "Resetting FG state machine to init.\n");
 		ab8500_fg_clear_cap_samples(di);
 		ab8500_fg_calc_cap_discharge_voltage(di, true);
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 		ab8500_fg_fill_vcap_sample(di, di->bat_cap.mah);
 		if (!di->flags.charging) {
-			di->inst_curr = ab8500_fg_inst_curr_blocking(di);
+			di->inst_curr = ab8500_fg_inst_curr(di);
 			ab8500_fg_fill_i_sample(di, di->inst_curr);
 		}
-#endif
-
 		ab8500_fg_charge_state_to(di, AB8500_FG_CHARGE_INIT);
 		ab8500_fg_discharge_state_to(di, AB8500_FG_DISCHARGE_INIT);
 		queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
@@ -3802,206 +3006,12 @@ static void ab8500_fg_reinit_work(struct work_struct *work)
 	}
 }
 
-/**
- * ab8500_fg_reinit() - forces FG algorithm to reinitialize with current values
- *
- * This function can be used to force the FG algorithm to recalculate a new
- * voltage based battery capacity.
- */
 void ab8500_fg_reinit(void)
 {
 	struct ab8500_fg *di = ab8500_fg_get();
-	/* User won't be notified if a null pointer returned. */
-	if (di != NULL)
+	if (di)
 		queue_delayed_work(di->fg_wq, &di->fg_reinit_work, 0);
 }
-
-/* Exposure to the sysfs interface */
-
-struct ab8500_fg_sysfs_entry {
-	struct attribute attr;
-	ssize_t (*show)(struct ab8500_fg *, char *);
-	ssize_t (*store)(struct ab8500_fg *, const char *, size_t);
-};
-
-static ssize_t charge_full_show(struct ab8500_fg *di, char *buf)
-{
-	return sprintf(buf, "%d\n", di->bat_cap.max_mah);
-}
-
-static ssize_t charge_full_store(struct ab8500_fg *di, const char *buf,
-				 size_t count)
-{
-	unsigned long charge_full;
-	ssize_t ret = -EINVAL;
-
-	ret = strict_strtoul(buf, 10, &charge_full);
-
-	dev_dbg(di->dev, "Ret %d charge_full %lu", ret, charge_full);
-
-	if (!ret) {
-		di->bat_cap.max_mah = (int) charge_full;
-		ret = count;
-	}
-	return ret;
-}
-
-static ssize_t charge_now_show(struct ab8500_fg *di, char *buf)
-{
-	return sprintf(buf, "%d\n", di->bat_cap.prev_mah);
-}
-
-static ssize_t charge_now_store(struct ab8500_fg *di, const char *buf,
-				 size_t count)
-{
-	unsigned long charge_now;
-	ssize_t ret;
-
-	ret = strict_strtoul(buf, 10, &charge_now);
-
-	dev_dbg(di->dev, "Ret %d charge_now %lu was %d",
-		ret, charge_now, di->bat_cap.prev_mah);
-
-	if (!ret) {
-		di->bat_cap.user_mah = (int) charge_now;
-		di->flags.user_cap = true;
-		ret = count;
-		queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
-	}
-	return ret;
-}
-
-static struct ab8500_fg_sysfs_entry charge_full_attr =
-	__ATTR(charge_full, 0644, charge_full_show, charge_full_store);
-
-static struct ab8500_fg_sysfs_entry charge_now_attr =
-	__ATTR(charge_now, 0644, charge_now_show, charge_now_store);
-
-static ssize_t
-ab8500_fg_show(struct kobject *kobj, struct attribute *attr, char *buf)
-{
-	struct ab8500_fg_sysfs_entry *entry;
-	struct ab8500_fg *di;
-
-	entry = container_of(attr, struct ab8500_fg_sysfs_entry, attr);
-	di = container_of(kobj, struct ab8500_fg, fg_kobject);
-
-	if (!entry->show)
-		return -EIO;
-
-	return entry->show(di, buf);
-}
-static ssize_t
-ab8500_fg_store(struct kobject *kobj, struct attribute *attr, const char *buf,
-		size_t count)
-{
-	struct ab8500_fg_sysfs_entry *entry;
-	struct ab8500_fg *di;
-
-	entry = container_of(attr, struct ab8500_fg_sysfs_entry, attr);
-	di = container_of(kobj, struct ab8500_fg, fg_kobject);
-
-	if (!entry->store)
-		return -EIO;
-
-	return entry->store(di, buf, count);
-}
-
-const struct sysfs_ops ab8500_fg_sysfs_ops = {
-	.show = ab8500_fg_show,
-	.store = ab8500_fg_store,
-};
-
-static struct attribute *ab8500_fg_attrs[] = {
-	&charge_full_attr.attr,
-	&charge_now_attr.attr,
-	NULL,
-};
-
-static struct kobj_type ab8500_fg_ktype = {
-	.sysfs_ops = &ab8500_fg_sysfs_ops,
-	.default_attrs = ab8500_fg_attrs,
-};
-
-/**
- * ab8500_chargalg_sysfs_exit() - de-init of sysfs entry
- * @di:                pointer to the struct ab8500_chargalg
- *
- * This function removes the entry in sysfs.
- */
-static void ab8500_fg_sysfs_exit(struct ab8500_fg *di)
-{
-	kobject_del(&di->fg_kobject);
-}
-
-/**
- * ab8500_chargalg_sysfs_init() - init of sysfs entry
- * @di:                pointer to the struct ab8500_chargalg
- *
- * This function adds an entry in sysfs.
- * Returns error code in case of failure else 0(on success)
- */
-static int ab8500_fg_sysfs_init(struct ab8500_fg *di)
-{
-	int ret = 0;
-
-	ret = kobject_init_and_add(&di->fg_kobject,
-		&ab8500_fg_ktype,
-		NULL, "battery");
-	if (ret < 0)
-		dev_err(di->dev, "failed to create sysfs entry\n");
-
-	return ret;
-}
-
-static ssize_t ab8500_show_capacity(struct device *dev,
-			     struct device_attribute *attr,
-			     char *buf)
-{
-	struct power_supply *psy = dev_get_drvdata(dev);
-	struct ab8500_fg *di;
-	int capacity;
-
-	di = to_ab8500_fg_device_info(psy);
-
-	if (di->bat->capacity_scaling)
-		capacity = di->bat_cap.cap_scale.scaled_cap;
-	else
-		capacity = DIV_ROUND_CLOSEST(di->bat_cap.permille, 10);
-
-	return scnprintf(buf, PAGE_SIZE, "%d\n", capacity);
-}
-
-static struct device_attribute ab8500_fg_sysfs_psy_attrs[] = {
-	__ATTR(capacity, S_IRUGO, ab8500_show_capacity, NULL),
-};
-
-static int ab8500_fg_sysfs_psy_create_attrs(struct device *dev)
-{
-	unsigned int i;
-
-	for (i = 0; i < ARRAY_SIZE(ab8500_fg_sysfs_psy_attrs); i++)
-		if (device_create_file(dev, &ab8500_fg_sysfs_psy_attrs[i]))
-			goto sysfs_psy_create_attrs_failed;
-
-	return 0;
-
-sysfs_psy_create_attrs_failed:
-	dev_err(dev, "Failed creating sysfs psy attrs.\n");
-	while (i--)
-		device_remove_file(dev, &ab8500_fg_sysfs_psy_attrs[i]);
-
-	return -EIO;
-}
-
-static void ab8500_fg_sysfs_psy_remove_attrs(struct device *dev)
-{
-	unsigned int i;
-
-	for (i = 0; i < ARRAY_SIZE(ab8500_fg_sysfs_psy_attrs); i++)
-		(void)device_remove_file(dev, &ab8500_fg_sysfs_psy_attrs[i]);
-}
-/* Exposure to the sysfs interface <<END>> */
 
 #if defined(CONFIG_PM)
 static int ab8500_fg_resume(struct platform_device *pdev)
@@ -4025,12 +3035,7 @@ static int ab8500_fg_suspend(struct platform_device *pdev,
 {
 	struct ab8500_fg *di = platform_get_drvdata(pdev);
 
-	flush_delayed_work_sync(&di->fg_periodic_work);
-	flush_work_sync(&di->fg_work);
-	flush_work_sync(&di->fg_acc_cur_work);
-	flush_delayed_work_sync(&di->fg_reinit_work);
-	flush_delayed_work_sync(&di->fg_low_bat_work);
-	flush_delayed_work_sync(&di->fg_check_hw_failure_work);
+	cancel_delayed_work(&di->fg_periodic_work);
 
 	/*
 	 * If the FG is enabled we will disable it before going to suspend
@@ -4046,12 +3051,10 @@ static int ab8500_fg_suspend(struct platform_device *pdev,
 #define ab8500_fg_resume       NULL
 #endif
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 static int ab8500_fg_reboot_call(struct notifier_block *self,
 				 unsigned long event, void *data)
 {
 	struct ab8500_fg *di;
-	int off_status = 0x0;
 
 	di = container_of(self, struct ab8500_fg, fg_notifier);
 
@@ -4063,6 +3066,8 @@ static int ab8500_fg_reboot_call(struct notifier_block *self,
 	/* Additionally, we will keep the last voltage and charging status
 	   for checking unknown/normal power off.
 	*/
+	int off_status = 0x0;
+
 	if (di->lpm_chg_mode && vbus_state)
 		off_status |= (MAGIC_CODE_RESET << OFF_MAGIC_CODE);
 	else
@@ -4082,16 +3087,11 @@ static int ab8500_fg_reboot_call(struct notifier_block *self,
 
 	return NOTIFY_DONE;
 }
-#endif
-
-struct ab8500_fg *pFgCharger;
 
 static int __devexit ab8500_fg_remove(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct ab8500_fg *di = platform_get_drvdata(pdev);
-
-	list_del(&di->node);
 
 	/* Disable coulomb counter */
 	ret = ab8500_fg_coulomb_counter(di, false);
@@ -4099,19 +3099,13 @@ static int __devexit ab8500_fg_remove(struct platform_device *pdev)
 		dev_err(di->dev, "failed to disable coulomb counter\n");
 
 	destroy_workqueue(di->fg_wq);
-	ab8500_fg_sysfs_exit(di);
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	wake_lock_destroy(&di->lowbat_wake_lock);
 	wake_lock_destroy(&di->lowbat_poweroff_wake_lock);
 	wake_lock_destroy(&di->cc_wake_lock);
-#endif
 
 	flush_scheduled_work();
-	ab8500_fg_sysfs_psy_remove_attrs(di->fg_psy.dev);
 	power_supply_unregister(&di->fg_psy);
 	platform_set_drvdata(pdev, NULL);
-	pFgCharger = NULL;
 	kfree(di);
 	return ret;
 }
@@ -4119,7 +3113,7 @@ static int __devexit ab8500_fg_remove(struct platform_device *pdev)
 /* ab8500 fg driver interrupts and their respective isr */
 static struct ab8500_fg_interrupts ab8500_fg_irq[] = {
 	{"NCONV_ACCU", ab8500_fg_cc_convend_handler},
-	{"BATT_OVV", ab8500_fg_batt_ovv_handler},
+	{"BATT_OVV", ab8500_battery_over_voltage_handler},
 	{"LOW_BAT_F", ab8500_fg_lowbatf_handler},
 	{"CC_INT_CALIB", ab8500_fg_cc_int_calib_handler},
 	{"CCEOC", ab8500_fg_cc_data_end_handler},
@@ -4136,28 +3130,12 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	if (!di)
 		return -ENOMEM;
 
-	pr_debug("[FG PROBE] start\n");
-
-	pr_debug("[FG PROBE] start\n");
-
 	mutex_init(&di->cc_lock);
 
 	/* get parent data */
 	di->dev = &pdev->dev;
 	di->parent = dev_get_drvdata(pdev->dev.parent);
 	di->gpadc = ab8500_gpadc_get();
-
-	if (!di->gpadc){
-		dev_err(di->dev, "No ADC device ready.\n");
-		ret = -ENODEV;
-		goto free_device_info;
-	}
-
-	if (!di->gpadc){
-		dev_err(di->dev, "No ADC device ready.\n");
-		ret = -ENODEV;
-		goto free_device_info;
-	}
 
 	plat = dev_get_platdata(di->parent->dev);
 
@@ -4191,10 +3169,8 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 
 	di->bat_cap.max_mah = di->bat_cap.max_mah_design;
 
-	di->vbat_nom = di->bat->bat_type[di->bat->batt_id].nominal_voltage;
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	di->vbat_cal_offset = 0;
+	di->vbat_nom = di->bat->bat_type[di->bat->batt_id].nominal_voltage;
 	di->gpadc_vbat_gain = (int)di->gpadc->cal_data[ADC_INPUT_VBAT].gain;
 	di->gpadc_vbat_offset = (int)di->gpadc->cal_data[ADC_INPUT_VBAT].offset;
 
@@ -4209,12 +3185,9 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	}
 #endif
 
-	di->reinit_capacity = true;
-#endif
-
 	di->init_capacity = true;
+	di->reinit_capacity = true;
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	/* fg_res parameter should be re-calculated
 	   according to the HW revision. */
 #if defined(CONFIG_MACH_JANICE)
@@ -4231,12 +3204,10 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 #endif
 
 	di->bat->fg_res = di->fg_res_dischg;
-#endif
 
 	ab8500_fg_charge_state_to(di, AB8500_FG_CHARGE_INIT);
 	ab8500_fg_discharge_state_to(di, AB8500_FG_DISCHARGE_INIT);
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	wake_lock_init(&di->lowbat_wake_lock, WAKE_LOCK_SUSPEND,
 		       "lowbat_wake_lock");
 
@@ -4245,7 +3216,6 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 
 	wake_lock_init(&di->cc_wake_lock, WAKE_LOCK_SUSPEND,
 		       "cc_wake_lock");
-#endif
 
 	/* Create a work queue for running the FG algorithm */
 	di->fg_wq = create_singlethread_workqueue("ab8500_fg_wq");
@@ -4264,10 +3234,8 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK_DEFERRABLE(&di->fg_reinit_work,
 		ab8500_fg_reinit_work);
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	INIT_DELAYED_WORK_DEFERRABLE(&di->fg_reinit_param_work,
 		ab8500_fg_reinit_param_work);
-#endif
 
 	/* Work delayed Queue to run the state machine */
 	INIT_DELAYED_WORK_DEFERRABLE(&di->fg_periodic_work,
@@ -4277,49 +3245,32 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK_DEFERRABLE(&di->fg_low_bat_work,
 		ab8500_fg_low_bat_work);
 
-	/* Init work for HW failure check */
-	INIT_DELAYED_WORK_DEFERRABLE(&di->fg_check_hw_failure_work,
-		ab8500_fg_check_hw_failure_work);
-
-	/* Reset battery low voltage flag */
-	di->flags.low_bat = false;
-
-	/* Initialize low battery counter */
-	di->low_bat_cnt = 10;
-
 	/* Initialize OVV, and other registers */
 	ret = ab8500_fg_init_hw_registers(di);
 	if (ret) {
 		dev_err(di->dev, "failed to initialize registers\n");
-		goto free_inst_curr_wq;
+		goto free_fg_wq;
 	}
 
 	/* Consider battery unknown until we're informed otherwise */
 	di->flags.batt_unknown = true;
-	di->flags.batt_id_received = false;
 
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	di->flags.fully_charged_1st = false;
 
 	di->fg_notifier.notifier_call = ab8500_fg_reboot_call;
 	register_reboot_notifier(&di->fg_notifier);
-#endif
 
 	/* Register FG power supply class */
 	ret = power_supply_register(di->dev, &di->fg_psy);
 	if (ret) {
 		dev_err(di->dev, "failed to register FG psy\n");
-		goto free_inst_curr_wq;
+		goto free_fg_wq;
 	}
 
 	di->fg_samples = SEC_TO_SAMPLE(di->bat->fg_params->init_timer);
 	ab8500_fg_coulomb_counter(di, true);
 
-	/*
-	 * Initialize completion used to notify completion and start
-	 * of inst current
-	 */
-	init_completion(&di->ab8500_fg_started);
+	/* Initialize completion used to notify completion of inst current */
 	init_completion(&di->ab8500_fg_complete);
 
 	/* Register interrupts */
@@ -4339,40 +3290,16 @@ static int __devinit ab8500_fg_probe(struct platform_device *pdev)
 	}
 	di->irq = platform_get_irq_byname(pdev, "CCEOC");
 	disable_irq(di->irq);
-	di->nbr_cceoc_irq_cnt = 0;
 
 	platform_set_drvdata(pdev, di);
+	list_add(&di->node, &ab8500_fg_list);
 
-	ret = ab8500_fg_sysfs_init(di);
-	if (ret) {
-		dev_err(di->dev, "failed to create sysfs entry\n");
-		goto free_irq;
-	}
-
-	ret = ab8500_fg_sysfs_psy_create_attrs(di->fg_psy.dev);
-	if (ret) {
-		dev_err(di->dev, "failed to create FG psy\n");
-		ab8500_fg_sysfs_exit(di);
-		goto free_irq;
-	}
 
 	/* Calibrate the fg first time */
 	di->flags.calibrate = true;
 	di->calib_state = AB8500_FG_CALIB_INIT;
-
-	/* Use room temp as default value until we get an update from driver. */
-	di->bat_temp = 210;
-
-	pFgCharger = di;
-
 	/* Run the FG algorithm */
 	queue_delayed_work(di->fg_wq, &di->fg_periodic_work, 0);
-
-	list_add_tail(&di->node, &ab8500_fg_list);
-
-	pr_debug("[FG PROBE] end\n");
-
-	pr_debug("[FG PROBE] end\n");
 
 	return ret;
 
@@ -4384,19 +3311,15 @@ free_irq:
 		irq = platform_get_irq_byname(pdev, ab8500_fg_irq[i].name);
 		free_irq(irq, di);
 	}
-free_inst_curr_wq:
+free_fg_wq:
 	destroy_workqueue(di->fg_wq);
-
-#if defined( CONFIG_SAMSUNG_CHARGER_SPEC )
 	wake_lock_destroy(&di->lowbat_wake_lock);
 	wake_lock_destroy(&di->lowbat_poweroff_wake_lock);
 	wake_lock_destroy(&di->cc_wake_lock);
-#endif
 
 free_device_info:
 	kfree(di);
 
-	pr_debug("[FG PROBE] FAILED\n");
 	return ret;
 }
 
