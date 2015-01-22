@@ -69,15 +69,16 @@ $(obj)/zImage-dtb:	$(obj)/zImage $(DTB_OBJS) FORCE
 
 endif
 
-targets += $(DTB_LIST)
-
 # Rule to build device tree blobs
-$(obj)/%.dtb: $(src)/dts/%.dts FORCE
-	$(call if_changed_dep,dtc)
+$(obj)/%.dtb: $(src)/dts/%.dts
+	$(call cmd,dtc)
 
-$(obj)/dtbs: $(DTB_OBJS)
+$(obj)/dtbs: $(addprefix $(obj)/, $(dtb-y))
 
-clean-files := *.dtb
+quiet_cmd_uimage = UIMAGE  $@
+      cmd_uimage = $(CONFIG_SHELL) $(MKIMAGE) -A arm -O linux -T kernel \
+		   -C none -a $(LOADADDR) -e $(STARTADDR) \
+		   -n 'Linux-$(KERNELRELEASE)' -d $< $@
 
 ifneq ($(LOADADDR),)
   UIMAGE_LOADADDR=$(LOADADDR)
