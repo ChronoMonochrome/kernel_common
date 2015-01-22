@@ -29,6 +29,8 @@
 
 #include "mm.h"
 
+#include "mm.h"
+
 static u64 get_coherent_dma_mask(struct device *dev)
 {
 	u64 mask = (u64)arm_dma_limit;

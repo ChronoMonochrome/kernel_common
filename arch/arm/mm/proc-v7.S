@@ -54,7 +54,6 @@ ENDPROC(cpu_v7_proc_fin)
 ENTRY(cpu_v7_reset)
 	mrc	p15, 0, r1, c1, c0, 0		@ ctrl register
 	bic	r1, r1, #0x1			@ ...............m
- THUMB(	bic	r1, r1, #1 << 30 )		@ SCTLR.TE (Thumb exceptions)
 	mcr	p15, 0, r1, c1, c0, 0		@ disable MMU
 	isb
 	mov	pc, r0
@@ -85,6 +84,90 @@ ENTRY(cpu_v7_dcache_clean_area)
 #endif
 	mov	pc, lr
 ENDPROC(cpu_v7_dcache_clean_area)
+
+/*
+ *	cpu_v7_switch_mm(pgd_phys, tsk)
+ *
+ *	Set the translation table base pointer to be pgd_phys
+ *
+ *	- pgd_phys - physical address of new TTB
+ *
+ *	It is assumed that:
+ *	- we are not using split page tables
+ */
+ENTRY(cpu_v7_switch_mm)
+#ifdef CONFIG_MMU
+	mov	r2, #0
+	ldr	r1, [r1, #MM_CONTEXT_ID]	@ get mm->context.id
+	ALT_SMP(orr	r0, r0, #TTB_FLAGS_SMP)
+	ALT_UP(orr	r0, r0, #TTB_FLAGS_UP)
+#ifdef CONFIG_ARM_ERRATA_430973
+	mcr	p15, 0, r2, c7, c5, 6		@ flush BTAC/BTB
+#endif
+#ifdef CONFIG_ARM_ERRATA_754322
+	dsb
+#endif
+	mcr	p15, 0, r2, c13, c0, 1		@ set reserved context ID
+	isb
+1:	mcr	p15, 0, r0, c2, c0, 0		@ set TTB 0
+	isb
+#ifdef CONFIG_ARM_ERRATA_754322
+	dsb
+#endif
+	mcr	p15, 0, r1, c13, c0, 1		@ set context ID
+	isb
+#endif
+	mov	pc, lr
+ENDPROC(cpu_v7_switch_mm)
+
+/*
+ *	cpu_v7_set_pte_ext(ptep, pte)
+ *
+ *	Set a level 2 translation table entry.
+ *
+ *	- ptep  - pointer to level 2 translation table entry
+ *		  (hardware version is stored at +2048 bytes)
+ *	- pte   - PTE value to store
+ *	- ext	- value for extended PTE bits
+ */
+ENTRY(cpu_v7_set_pte_ext)
+#ifdef CONFIG_MMU
+	str	r1, [r0]			@ linux version
+
+	bic	r3, r1, #0x000003f0
+	bic	r3, r3, #PTE_TYPE_MASK
+	orr	r3, r3, r2
+	orr	r3, r3, #PTE_EXT_AP0 | 2
+
+	tst	r1, #1 << 4
+	orrne	r3, r3, #PTE_EXT_TEX(1)
+
+	eor	r1, r1, #L_PTE_DIRTY
+	tst	r1, #L_PTE_RDONLY | L_PTE_DIRTY
+	orrne	r3, r3, #PTE_EXT_APX
+
+	tst	r1, #L_PTE_USER
+	orrne	r3, r3, #PTE_EXT_AP1
+#ifdef CONFIG_CPU_USE_DOMAINS
+	@ allow kernel read/write access to read-only user pages
+	tstne	r3, #PTE_EXT_APX
+	bicne	r3, r3, #PTE_EXT_APX | PTE_EXT_AP0
+#endif
+
+	tst	r1, #L_PTE_XN
+	orrne	r3, r3, #PTE_EXT_XN
+
+	tst	r1, #L_PTE_YOUNG
+	tstne	r1, #L_PTE_PRESENT
+	moveq	r3, #0
+
+ ARM(	str	r3, [r0, #2048]! )
+ THUMB(	add	r0, r0, #2048 )
+ THUMB(	str	r3, [r0] )
+	mcr	p15, 0, r0, c7, c10, 1		@ flush_pte
+#endif
+	mov	pc, lr
+ENDPROC(cpu_v7_set_pte_ext)
 
 	string	cpu_v7_name, "ARMv7 Processor"
 	.align
@@ -148,6 +231,10 @@ ENDPROC(cpu_v7_do_resume)
  *	Initialise TLB, Caches, and MMU state ready to switch the MMU
  *	on.  Return in r0 the new CP15 C1 control register setting.
  *
+ *	We automatically detect if we have a Harvard cache, and use the
+ *	Harvard cache control instructions insead of the unified cache
+ *	control instructions.
+ *
  *	This should be able to cover all ARMv7 cores.
  *
  *	It is assumed that:
@@ -157,7 +244,6 @@ __v7_ca5mp_setup:
 __v7_ca9mp_setup:
 	mov	r10, #(1 << 0)			@ TLB ops broadcasting
 	b	1f
-__v7_ca7mp_setup:
 __v7_ca15mp_setup:
 	mov	r10, #0
 1:
@@ -172,7 +258,7 @@ __v7_ca15mp_setup:
 __v7_setup:
 	adr	r12, __v7_setup_stack		@ the local stack
 	stmia	r12, {r0-r5, r7, r9, r11, lr}
-	bl	v7_flush_dcache_all
+	bl	__v7_flush_dcache_all
 	ldmia	r12, {r0-r5, r7, r9, r11, lr}
 
 	mrc	p15, 0, r0, c0, c0, 0		@ read main ID register
@@ -230,7 +316,9 @@ __v7_setup:
 	mcreq	p15, 0, r10, c15, c0, 1		@ write diagnostic register
 #endif
 #ifdef CONFIG_ARM_ERRATA_743622
-	teq	r5, #0x00200000			@ only present in r2p*
+	teq	r6, #0x20			@ present in r2p0
+	teqne	r6, #0x21			@ present in r2p1
+	teqne	r6, #0x22			@ present in r2p2
 	mrceq	p15, 0, r10, c15, c0, 1		@ read diagnostic register
 	orreq	r10, r10, #1 << 6		@ set bit #6
 	mcreq	p15, 0, r10, c15, c0, 1		@ write diagnostic register
@@ -245,7 +333,9 @@ __v7_setup:
 #endif
 
 3:	mov	r10, #0
+#ifdef HARVARD_CACHE
 	mcr	p15, 0, r10, c7, c5, 0		@ I+BTB cache invalidate
+#endif
 	dsb
 #ifdef CONFIG_MMU
 	mcr	p15, 0, r10, c8, c7, 0		@ invalidate I + D TLBs
@@ -254,18 +344,6 @@ __v7_setup:
 	ldr	r6, =NMRR			@ NMRR
 	mcr	p15, 0, r5, c10, c2, 0		@ write PRRR
 	mcr	p15, 0, r6, c10, c2, 1		@ write NMRR
-#endif
-#ifndef CONFIG_ARM_THUMBEE
-	mrc	p15, 0, r0, c0, c1, 0		@ read ID_PFR0 for ThumbEE
-	and	r0, r0, #(0xf << 12)		@ ThumbEE enabled field
-	teq	r0, #(1 << 12)			@ check if ThumbEE is present
-	bne	1f
-	mov	r5, #0
-	mcr	p14, 6, r5, c1, c0, 0		@ Initialize TEEHBR to 0
-	mrc	p14, 6, r0, c0, c0, 0		@ load TEECR
-	orr	r0, r0, #1			@ set the 1st bit in order to
-	mcr	p14, 6, r0, c0, c0, 0		@ stop userspace TEEHBR access
-1:
 #endif
 	adr	r5, v7_crval
 	ldmia	r5, {r5, r6}
@@ -305,11 +383,11 @@ __v7_setup_stack:
 	 */
 .macro __v7_proc initfunc, mm_mmuflags = 0, io_mmuflags = 0, hwcaps = 0
 	ALT_SMP(.long	PMD_TYPE_SECT | PMD_SECT_AP_WRITE | PMD_SECT_AP_READ | \
-			PMD_SECT_AF | PMD_FLAGS_SMP | \mm_mmuflags)
+			PMD_FLAGS_SMP | \mm_mmuflags)
 	ALT_UP(.long	PMD_TYPE_SECT | PMD_SECT_AP_WRITE | PMD_SECT_AP_READ | \
-			PMD_SECT_AF | PMD_FLAGS_UP | \mm_mmuflags)
-	.long	PMD_TYPE_SECT | PMD_SECT_AP_WRITE | \
-		PMD_SECT_AP_READ | PMD_SECT_AF | \io_mmuflags
+			PMD_FLAGS_UP | \mm_mmuflags)
+	.long	PMD_TYPE_SECT | PMD_SECT_XN | PMD_SECT_AP_WRITE | \
+		PMD_SECT_AP_READ | \io_mmuflags
 	W(b)	\initfunc
 	.long	cpu_arch_name
 	.long	cpu_elf_name
@@ -322,7 +400,6 @@ __v7_setup_stack:
 	.long	v7_cache_fns
 .endm
 
-#ifndef CONFIG_ARM_LPAE
 	/*
 	 * ARM Ltd. Cortex A5 processor.
 	 */
@@ -353,6 +430,16 @@ __v7_ca7mp_proc_info:
 	.long	0xff0ffff0
 	__v7_proc __v7_ca7mp_setup, hwcaps = HWCAP_IDIV
 	.size	__v7_ca7mp_proc_info, . - __v7_ca7mp_proc_info
+
+	/*
+	 * ARM Ltd. Cortex A15 processor.
+	 */
+	.type	__v7_ca15mp_proc_info, #object
+__v7_ca15mp_proc_info:
+	.long	0x410fc0f0
+	.long	0xff0ffff0
+	__v7_proc __v7_ca15mp_setup, hwcaps = HWCAP_IDIV
+	.size	__v7_ca15mp_proc_info, . - __v7_ca15mp_proc_info
 
 	/*
 	 * ARM Ltd. Cortex A15 processor.
