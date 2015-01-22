@@ -69,4 +69,30 @@ obj-$(CONFIG_USB_ZD1201)        += usb/
 obj-$(CONFIG_USB_IPHETH)        += usb/
 obj-$(CONFIG_USB_CDC_PHONET)   += usb/
 
-obj-$(CONFIG_HYPERV_NET) += hyperv/
+obj-$(CONFIG_WLAN) += wireless/
+obj-$(CONFIG_NET_TULIP) += tulip/
+obj-$(CONFIG_HAMRADIO) += hamradio/
+obj-$(CONFIG_IRDA) += irda/
+obj-$(CONFIG_ETRAX_ETHERNET) += cris/
+obj-$(CONFIG_ENP2611_MSF_NET) += ixp2000/
+
+obj-$(CONFIG_NETCONSOLE) += netconsole.o
+
+obj-$(CONFIG_FS_ENET) += fs_enet/
+
+obj-$(CONFIG_NETXEN_NIC) += netxen/
+obj-$(CONFIG_NIU) += niu.o
+obj-$(CONFIG_VIRTIO_NET) += virtio_net.o
+obj-$(CONFIG_SFC) += sfc/
+
+obj-$(CONFIG_WIMAX) += wimax/
+obj-$(CONFIG_CAIF) += caif/
+
+obj-$(CONFIG_OCTEON_MGMT_ETHERNET) += octeon/
+obj-$(CONFIG_PCH_GBE) += pch_gbe/
+obj-$(CONFIG_TILE_NET) += tile/
+
+ifdef CONFIG_PHONET
+obj-$(CONFIG_U8500_SHRM) += u8500_shrm.o
+obj-$(CONFIG_MODEM_M6718_SPI) += m6718_modem_net.o
+endif
