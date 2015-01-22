@@ -128,12 +128,12 @@ config MACH_JANICE_KOR
 	bool "Janice_kor"
 	help
 	  Supports Janice_kor boards
-# config MACH_JANICE_CHN
-#	bool "Janice_chn"
-#	help
-#	  Supports Chinese features of Janice_chn boards. This features
-#	  will be used in Power off alarm and OVP UI concept for Chinese
-#	  models.
+config MACH_JANICE_CHN
+	bool "Janice_chn"
+	help
+	  Supports Chinese features of Janice_chn boards. This features
+	  will be used in Power off alarm and OVP UI concept for Chinese
+	  models.
 config MACH_CODINA
 	bool "Codina"
 	help
@@ -253,7 +253,6 @@ config UX500_DEBUG_NO_LAUTERBACH
        help
 	  Disable clocks needed for Lauterbach debugging at boot.
 	  If yes, you will reduce the power consumption.
-       default y
 
 config UX500_L2X0_PREFETCH_CTRL
 	bool "PL310 prefetch control"
@@ -343,11 +342,6 @@ config TARGET_LOCALE_CHN
 	help
           This enables 'Wlan CHN' feature.
 
-config MACH_CODINA_EURO
-	bool "Codina Euro device"
-	default n
-	help
-	  Supports Codina Euro boards.
 source "arch/arm/mach-ux500/Kconfig-arch"
 source "arch/arm/mach-ux500/pm/Kconfig"
 source "arch/arm/mach-ux500/test/Kconfig"

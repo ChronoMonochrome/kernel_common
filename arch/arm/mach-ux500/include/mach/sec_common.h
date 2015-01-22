@@ -52,7 +52,6 @@
 #define REBOOT_MODE_CHARGING		5
 #define REBOOT_MODE_ARM9_FOTA		6
 #define REBOOT_MODE_CP_CRASH		7
-#define REBOOT_MODE_FORCEREBOOT		8
 #define REBOOT_MODE_PRERECOVERY		9
 
 /* DEBUG_LEVEL */
@@ -60,7 +59,7 @@
 #define DEBUG_LEVEL_MID	(0x494d)
 #define DEBUG_LEVEL_HIGH	(0x4948)
 
-#if defined(CONFIG_MACH_JANICE_CHN) || defined(CONFIG_MACH_CODINA_CHN) || defined(CONFIG_MACH_GAVINI_CHN) || defined(CONFIG_MACH_CODINA_EURO) || defined(CONFIG_MACH_CODINA)
+#if defined(CONFIG_MACH_JANICE_CHN)
 extern u32 sec_lpm_bootmode;
 #endif
 

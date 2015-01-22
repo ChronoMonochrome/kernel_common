@@ -69,9 +69,6 @@
 #include <mach/pm.h>
 #include <mach/reboot_reasons.h>
 
-#if defined(CONFIG_NFC_PN544)
-#include <linux/pn544.h>
-#endif
 
 #include <video/mcde_display.h>
 
@@ -487,7 +484,8 @@ static void mxt224_power_con(bool on)
 		gpio_direction_output(TSP_LDO_ON1_JANICE_R0_0, 0);
 	}
 
-	printk(KERN_INFO "[TSP] GPIO output (%s)\n", (on) ? "on" : "off");
+	printk(KERN_INFO "%s is finished.(%s)\n",
+						__func__, (on) ? "on" : "off");
 }
 
 #ifdef CONFIG_USB_SWITCHER
@@ -574,22 +572,19 @@ static const u8 *mxt224_config[] = {
 /*
 	Configuration for MXT224-E
 */
-#define MXT224E_THRESHOLD_BATT			15	/* Default: 22 */
-#define MXT224E_THRESHOLD_CHRG			20	/* Default: 25 */
-#define MXT224E_CALCFG_BATT			0x72 	//114
-#define MXT224E_CALCFG_CHRG			0x72 
+#define MXT224E_THRESHOLD_BATT		22
+#define MXT224E_THRESHOLD_CHRG		25
+#define MXT224E_CALCFG_BATT		0x72 //114
+#define MXT224E_CALCFG_CHRG		0x72 
 #define MXT224E_ATCHFRCCALTHR_NORMAL		40
 #define MXT224E_ATCHFRCCALRATIO_NORMAL		55
 
-/* Power config settings */
 static u8 t7_config_e[] = {GEN_POWERCONFIG_T7,
 				48, 255, 25};
 
-/* Acquisition config */
 static u8 t8_config_e[] = {GEN_ACQUISITIONCONFIG_T8,
 				22, 0, 5, 1, 0, 0, 4, 35, MXT224E_ATCHFRCCALTHR_NORMAL, MXT224E_ATCHFRCCALRATIO_NORMAL};
 
-/* Multitouch screen config */
 #if defined(CONFIG_MACH_T1_CHN)
 static u8 t9_config_e[] = {TOUCH_MULTITOUCHSCREEN_T9,
 				139, 0, 0, 19, 11, 0, 32, MXT224E_THRESHOLD_BATT, 2, 1, 10, 15, 1,
@@ -603,7 +598,6 @@ static u8 t9_config_e[] = {TOUCH_MULTITOUCHSCREEN_T9,
 				143, 80, 18, 15, 50, 50, 0};
 #endif
 
-/* Key array config */
 static u8 t15_config_e[] = {TOUCH_KEYARRAY_T15,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -633,7 +627,6 @@ static u8 t46_config_e[] = {SPT_CTECONFIG_T46,
 static u8 t47_config_e[] = {PROCI_STYLUS_T47,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-/* Noise suppression config */
 static u8 t48_config_e[] = {PROCG_NOISESUPPRESSION_T48,
 				3, 132, MXT224E_CALCFG_BATT, 24, 0, 0, 0, 0, 1, 2, 0, 0, 0,
 				6,	6, 0, 0, 48, 4, 48, 10, 0, 100, 5, 0, 100, 0, 5,
@@ -883,28 +876,12 @@ static struct platform_device janice_gpio_i2c7_pdata = {
 	},
 };
 
-#if defined(CONFIG_NFC_PN544)
-static struct pn544_i2c_platform_data pn544_pdata __initdata = {
-	.irq_gpio = NFC_IRQ_JANICE_R0_0,
-	.ven_gpio = NFC_EN_JANICE_R0_0,
-	.firm_gpio = NFC_FIRM_JANICE_R0_0,
-};
-#endif
-
 static struct i2c_board_info __initdata janice_r0_0_gpio_i2c7_devices[] = {
-#if defined(CONFIG_NFC_PN544)
-	{
-		I2C_BOARD_INFO("pn544", 0x2b),
-		.irq = GPIO_TO_IRQ(NFC_IRQ_JANICE_R0_0),
-		.platform_data = &pn544_pdata,
-	},
-#else
-	// TBD - NFC
-	#if 0
+// TBD - NFC
+#if 0
 	{
 		I2C_BOARD_INFO("", 0x30),
 	},
-	#endif
 #endif
 };
 
@@ -2219,4 +2196,5 @@ MACHINE_START(JANICE, "SAMSUNG JANICE")
 	.timer		= &ux500_timer,
 	.init_machine	= janice_init_machine,
 	.restart	= ux500_restart,
-MACHINE_END 
+MACHINE_END
+

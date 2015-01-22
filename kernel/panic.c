@@ -23,6 +23,7 @@
 #include <linux/init.h>
 #include <linux/nmi.h>
 #include <linux/dmi.h>
+#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
 #include <asm/cacheflush.h>
 #include <linux/smp.h>
 #include <linux/percpu.h>
@@ -38,6 +39,7 @@ void ux500_clean_l2_cache_all(void);
 
 /* prcmu register dump */
 void dbx500_dump_in_panic(void);
+#endif /* CONFIG_SAMSUNG_KERNEL_DEBUG */
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -70,6 +72,8 @@ static long no_blink(int state)
 long (*panic_blink)(int state);
 EXPORT_SYMBOL(panic_blink);
 
+
+#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
 typedef struct tag_mmu_info {
 	int SCTLR;
 	int TTBR0;
@@ -350,6 +354,7 @@ void kernel_sec_save_final_context(void)
 
 EXPORT_SYMBOL(kernel_sec_save_final_context);
 
+#endif	/* CONFIG_SAMSUNG_KERNEL_DEBUG */
 
 /**
  *	panic - halt the system
@@ -404,6 +409,8 @@ NORET_TYPE void panic(const char * fmt, ...)
 	 */
 	smp_send_stop();
 
+#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
+	
 		/*kernel_sec_save_final_context();*/
 
 	/* L1 & L2 cache management */
@@ -437,6 +444,7 @@ NORET_TYPE void panic(const char * fmt, ...)
 		touch_nmi_watchdog();
 		mdelay(1);
 	}
+#endif /* CONFIG_SAMSUNG_KERNEL_DEBUG */
 
 	bust_spinlocks(0);
 

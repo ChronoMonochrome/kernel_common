@@ -58,19 +58,8 @@ obj-$(CONFIG_MACH_GAVINI)		+= board-gavini-pins.o board-gavini.o board-gavini-re
 ifeq ($(CONFIG_MACH_GAVINI), y)
 board-mcde-objs			+= board-gavini-mcde.o
 endif
-
-ifeq ($(CONFIG_MACH_CODINA_EURO), y)
-obj-$(CONFIG_MACH_CODINA_EURO)		+= board-codina-pins.o board-codina_eur.o board-codina-regulators.o \
-					   board-mop500-wlan.o board-codina-bm.o board-codina-battery.o board-codina-sdi.o
-else
-ifeq ($(CONFIG_MACH_CODINA_CHN), y)
-obj-$(CONFIG_MACH_CODINA_CHN)		+= board-codina-pins.o board-codina_eur.o board-codina-regulators.o \
-					   board-mop500-wlan.o board-codina-bm.o board-codina-battery.o board-codina-sdi.o
-else
 obj-$(CONFIG_MACH_CODINA)		+= board-codina-pins.o board-codina.o board-codina-regulators.o \
 					   board-mop500-wlan.o board-codina-bm.o board-codina-battery.o board-codina-sdi.o
-endif
-endif
 ifeq ($(CONFIG_MACH_CODINA), y)
 board-mcde-objs			+= board-codina-mcde.o
 endif

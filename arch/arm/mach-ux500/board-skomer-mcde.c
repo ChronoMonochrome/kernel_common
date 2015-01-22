@@ -44,11 +44,11 @@
 /* Based on PLL DDR Freq at 798,72 MHz */
 #define HDMI_FREQ_HZ			33280000
 #define TV_FREQ_HZ			38400000
-#define DSI_HS_FREQ_HZ_HVA40WV1		349440000
+#define DSI_HS_FREQ_HZ_HVA40WV1		420160000
 #define DSI_HS_FREQ_HZ_NT35512		349440000
 #define DSI_LP_FREQ_HZ			19200000
 
-#define DSI_PLL_FREQ_HZ_HVA40WV1	(DSI_HS_FREQ_HZ_HVA40WV1 * 2)
+#define DSI_PLL_FREQ_HZ_HVA40WV1	615680000
 #define DSI_PLL_FREQ_HZ_NT35512		(DSI_HS_FREQ_HZ_NT35512 * 2)
 
 
@@ -195,8 +195,8 @@ static struct mcde_port hva40wv1_port0 = {
 	.type = MCDE_PORTTYPE_DSI,
 	.mode = MCDE_PORTMODE_CMD,
 	.pixel_format = MCDE_PORTPIXFMT_DSI_24BPP,
-	.sync_src = MCDE_SYNCSRC_TE0,
-	.frame_trig = MCDE_TRIG_HW,
+	.sync_src = MCDE_SYNCSRC_OFF,
+	.frame_trig = MCDE_TRIG_SW,
 	.phy.dsi = {
 			.num_data_lanes = 2,
 			.host_eot_gen = true,
@@ -419,12 +419,10 @@ int __init init_skomer_display_devices(void)
 
 	if (lcd_type == LCD_PANEL_TYPE_HVA40WV1)
 		ret = mcde_display_device_register(&hva40wv1_display0);
-	else
+	else {
 		ret = mcde_display_device_register(&nt35512_display0);
-
-	/* increased OPP required for DSI Mode panel */
-	pdata->update_opp = update_mcde_opp;
-
+		pdata->update_opp = update_mcde_opp; // increased OPP required for DSI Video Mode panel.
+	}
 
 	if (ret)
 		printk(KERN_ERR "Failed to register display device\n");

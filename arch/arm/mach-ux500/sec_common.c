@@ -223,7 +223,7 @@ static __init int setup_boot_mode(char *opt)
 
 __setup("bootmode=", setup_boot_mode);
 
-#if defined(CONFIG_MACH_JANICE_CHN) || defined (CONFIG_MACH_GAVINI) || defined (CONFIG_MACH_CODINA_CHN) || defined (CONFIG_MACH_GAVINI_CHN) || defined(CONFIG_MACH_CODINA_EURO) || defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_JANICE)
+#if defined(CONFIG_MACH_JANICE_CHN) || defined (CONFIG_MACH_GAVINI)
 u32 sec_lpm_bootmode;
 EXPORT_SYMBOL(sec_lpm_bootmode);
 
@@ -821,14 +821,12 @@ static int sec_cpufreq_notifier(struct notifier_block *nb,
 static int sec_policy_notifier(struct notifier_block *nb,
 					unsigned long val, void *data)
 {
-/*
 	struct cpufreq_policy *policy = data;
 
 	if (val == CPUFREQ_NOTIFY)
 		printk(KERN_INFO "DVFS Governor Policy set to - %s\n", policy->governor->name);
 
 	return 0;
-*/
 }
 #endif
 

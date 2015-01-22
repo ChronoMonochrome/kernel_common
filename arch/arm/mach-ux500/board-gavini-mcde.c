@@ -27,12 +27,9 @@
 #include "pins-db8500.h"
 #include "pins.h"
 #include <mach/db8500-regs.h>
-#include <linux/ktime.h>
-
 	 
 
-/* Taken from the programmed value of the LCD clock in PRCMU */
-#define PRCMU_DPI_CLK_FREQ	80000000 //50000000
+#define PRCMU_DPI_CLK_FREQ	50000000
 	 
 #ifdef CONFIG_FB_MCDE
 
@@ -379,41 +376,11 @@ static void update_mcde_opp(struct device *dev,
 					struct mcde_opp_requirements *reqs)
 {
 	s32 req_ape = PRCMU_QOS_DEFAULT_VALUE;
-	s32 req_ddr = PRCMU_QOS_DEFAULT_VALUE;
-	static s32 requested_qos;
-	static u8 prev_rot_channels;
-	static ktime_t rot_time;
-	s64 diff;
 
-	/* If a rotation is detected, clock up CPU to max */
-	if (reqs->num_rot_channels != prev_rot_channels) {
-		prev_rot_channels = reqs->num_rot_channels;
-		rot_time = ktime_get();
-	}
+	if (reqs->num_rot_channels && reqs->num_overlays > 1)
+		req_ape = PRCMU_QOS_MAX_VALUE;
 
-   diff = ktime_to_ms(ktime_sub(ktime_get(),rot_time));
-
-	/*
-	 * Wait a while before clocking down again
-	 * unless we have an overlay
-	 */
-
-	if ((reqs->num_overlays > 1) ||
-		 (diff < 5000)) {
- 		req_ape = PRCMU_QOS_MAX_VALUE;
-		req_ddr = PRCMU_QOS_MAX_VALUE;
-	} else {
-		req_ape = PRCMU_QOS_DEFAULT_VALUE;
-		req_ddr = PRCMU_QOS_DEFAULT_VALUE;
-	}
-
-	if (req_ape != requested_qos) {
-		requested_qos = req_ape;
-		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
-						dev_name(dev), req_ape);
-		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
-						dev_name(dev), req_ddr);
-	}
+	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, dev_name(dev), req_ape);
 }
 
 int __init init_gavini_display_devices(void)
@@ -421,10 +388,11 @@ int __init init_gavini_display_devices(void)
 	struct mcde_platform_data *pdata = ux500_mcde_device.dev.platform_data;
 
 	int ret;
+
 	ret = mcde_dss_register_notifier(&display_nb);
 	if (ret)
 		pr_warning("Failed to register dss notifier\n");
-	if (system_rev >= GAVINI_R0_3) {
+		if (system_rev >= GAVINI_R0_3) {
 		if (display_initialized_during_boot) {
 			generic_display0_r0_3.power_mode = MCDE_DISPLAY_PM_ON;
 			gavini_dpi_pri_display_info_r0_3.platform_enabled = 1;
@@ -438,32 +406,31 @@ int __init init_gavini_display_devices(void)
 		gavini_dpi_pri_display_info_r0_3.video_mode.pixclock /= \
 						port0.phy.dpi.clock_div;
 
-		ret = mcde_display_device_register(&generic_display0_r0_3);
+		//ret = mcde_display_device_register(&generic_display0_r0_3);
 	} else 
 	{
-		if (display_initialized_during_boot) {
-			generic_display0.power_mode = MCDE_DISPLAY_PM_ON;
-			gavini_dpi_pri_display_info.platform_enabled = 1;
-		}
-
-		/* 
-		 * The pixclock setting is not used within MCDE. The clock is
-		 * setup elsewhere. But the pixclock value is visible in user
-		 * space.
-		 */
-		gavini_dpi_pri_display_info.video_mode.pixclock /= port0.phy.dpi.clock_div;
-		
-		ret = mcde_display_device_register(&generic_display0);	
+	 
+	if (display_initialized_during_boot) {
+		generic_display0.power_mode = MCDE_DISPLAY_PM_ON;
+		gavini_dpi_pri_display_info.platform_enabled = 1;
 	}
-		/* MCDE pixelfetchwtrmrk levels in pixels per overlay */
-	{
-#if 1
+
 	/*
-	 * The pixel fetcher FIFO is 128*64bit = 8192bits = 1024bytes.
-	 * Overlay 0 is assumed 32bpp and overlay 1 is assumed 16bpp
+	 * The pixclock setting is not used within MCDE. The clock is
+	 * setup elsewhere. But the pixclock value is visible in user
+	 * space.
 	 */
-	pdata->pixelfetchwtrmrk[0] = 128;//160; /* 160 -> 160px*32bpp/8=640bytes */
-	pdata->pixelfetchwtrmrk[1] = 128;//192; /* 192 -> 192px*16bpp/8=384bytes */
+	gavini_dpi_pri_display_info.video_mode.pixclock /= port0.phy.dpi.clock_div;
+	
+	}
+	/* MCDE pixelfetchwtrmrk levels per overlay */
+	{
+#if 1 /* 16 bit overlay */
+#define BITS_PER_WORD (4 * 64)
+	u32 fifo = (1024*8 - 8 * BITS_PER_WORD) / 3;
+	fifo &= ~(BITS_PER_WORD - 1);
+	pdata->pixelfetchwtrmrk[0] = fifo * 2 / 32;	/* LCD 32bpp */
+	pdata->pixelfetchwtrmrk[1] = fifo * 1 / 16;	/* LCD 16bpp */
 #else /* 24 bit overlay */
 	u32 fifo = (1024*8 - 8 * BITS_PER_WORD) / 7;
 	fifo &= ~(BITS_PER_WORD - 1);
@@ -473,6 +440,7 @@ int __init init_gavini_display_devices(void)
 	}
 	pdata->update_opp = update_mcde_opp;
 
+	ret = mcde_display_device_register(&generic_display0);
 	if (ret)
 		pr_warning("Failed to register generic display device 0\n");
 
@@ -494,4 +462,5 @@ struct fb_info* get_primary_display_fb_info(void)
 module_init(init_gavini_display_devices);
 
 #endif	/* CONFIG_FB_MCDE */
+
 

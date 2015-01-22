@@ -41,7 +41,7 @@
 #include <linux/leds.h>
 #include <linux/leds-regulator.h>
 #include <linux/mfd/abx500/ux500_sysctrl.h>
-#include <video/ktd253x_bl.h>
+#include <video/ktd259x_bl.h>
 #include <../drivers/staging/android/timed_gpio.h>
 
 #include <net/bluetooth/bluetooth.h>
@@ -553,7 +553,7 @@ struct mms_ts_platform_data mms134s_ts_pdata = {
 	.max_y		= 800,
 
 	.num_rx		= 12,	/* number of RX channels in chip */
-	.num_tx		= 19,	/* number of TX channels in chip */
+	.num_tx		= 20,	/* number of TX channels in chip */
 	.fw_ver_reg	= 0xF3,	/* Register address for Firmware version */
 	.max_fingers	= 5,	/* supported by firmware */
 
@@ -561,13 +561,8 @@ struct mms_ts_platform_data mms134s_ts_pdata = {
 	.gpio_scl	= KYLE_GPIO_TSP_SCL,
 	.gpio_int	= KYLE_GPIO_TSP_INT_1V8,
 	.pin_configure	= mms_ts_pin_configure,
-
-	.fw_name_ums_0a		= "/sdcard/firmware/melfas/I407_ME_0A.fw.bin",
-	.fw_name_ums_0f		= "/sdcard/firmware/melfas/I407_ME_0F.fw.bin",
-	.fw_name_ums_47		= "/sdcard/firmware/melfas/I407_ME_47.fw.bin",
-	.fw_name_builtin_0a	= "melfas/I407_ME_0A.fw",
-	.fw_name_builtin_0f	= "melfas/I407_ME_0F.fw",
-	.fw_name_builtin_47	= "melfas/I407_ME_47.fw",
+	.fw_name_ums	= "/sdcard/firmware/melfas/I407_ME_0F.fw.bin",
+	.fw_name_builtin = "melfas/I407_ME_0F.fw",
 
 	.key_map	= mms_ts_key_map,
 	.key_nums	= ARRAY_SIZE(mms_ts_key_map),
@@ -1292,7 +1287,7 @@ static struct ab8500_gpio_platform_data ab8505_gpio_pdata = {
 	 * GPIO2/3(GpioPud1) = 1 and GPIO10/11(GpioPud2) = 1.
 	 * GPIO13(GpioPud2) = 1 and GPIO50(GpioPud7) = 1.
 	 */
-	.config_pullups    = {0xE7, 0x17, 0x00, 0x00, 0x00, 0x00, 0x06},
+	.config_pullups    = {0xE7, 0x17, 0x00, 0x00, 0x00, 0x00, 0x02},
 };
 
 
@@ -1338,16 +1333,16 @@ static struct sec_jack_zone sec_jack_zones[] = {
 		.jack_type = SEC_HEADSET_4POLE,
 	},
 	{
-		/* 852 < adc <= 1650, default to 4 pole if it stays */
+		/* 852 < adc <= 1850, default to 4 pole if it stays */
 		/* in this range for 40ms (20ms delays, 2 samples)
 		 */
-		.adc_high = 1650,
+		.adc_high = 1850,
 		.delay_ms = 20,
 		.check_count = 2,
 		.jack_type = SEC_HEADSET_4POLE,
 	},
 	{
-		/* adc > 1650, unstable zone, default to 3pole if it stays
+		/* adc > 1850, unstable zone, default to 3pole if it stays
 		 * in this range for a second (10ms delays, 100 samples)
 		 */
 		.adc_high = 0x7fffffff,
@@ -1402,7 +1397,7 @@ static void sec_jack_mach_init(struct platform_device *pdev)
 		pr_err("%s: ab8500 write failed\n", __func__);
 
 	ret = abx500_set_register_interruptible(&pdev->dev, AB8500_ECI_AV_ACC,
-						0x82, 0x33); //KSND
+						0x82, 0x33);
 	if (ret < 0)
 		pr_err("%s: ab8500 write failed\n", __func__);
 
@@ -1418,11 +1413,8 @@ int sec_jack_get_det_level(struct platform_device *pdev)
 	u8 value = 0;
 	int ret = 0;
 
-	ret = abx500_get_register_interruptible(&pdev->dev, AB8500_INTERRUPT, 0x4,
+	abx500_get_register_interruptible(&pdev->dev, AB8500_INTERRUPT, 0x4,
 		&value);
-	if (ret < 0)
-		return ret;
-
 	ret = (value & 0x04) >> 2;
 	pr_info("%s: ret=%x\n", __func__, ret);
 
@@ -1441,23 +1433,19 @@ struct sec_jack_platform_data sec_jack_pdata = {
 	.det_f = "ACC_DETECT_1DB_F",
 	.buttons_r = "ACC_DETECT_21DB_R",
 	.buttons_f = "ACC_DETECT_21DB_F",
-	.regulator_mic_source = "v-amic1",
-#ifdef CONFIG_SAMSUNG_JACK_SW_WATERPROOF
-	.ear_reselector_zone    = 1650,
-#endif
+	.regulator_mic_source = "v-amic1"
 };
 #endif
 
-#if 0
 static struct ab8500_led_pwm leds_pwm_data[] = {
 
 };
+
 
 struct ab8500_pwmled_platform_data kyle_pwmled_plat_data = {
 	.num_pwm = 0,
 	.leds = leds_pwm_data,
 };
-#endif
 
 #ifdef CONFIG_MODEM_U8500
 static struct platform_device u8500_modem_dev = {
@@ -1642,14 +1630,14 @@ static struct amba_pl011_data uart2_plat = {
 
 
 
-#if defined(CONFIG_BACKLIGHT_KTD253)
+#if defined(CONFIG_BACKLIGHT_KTD259)
 /* The following table is used to convert brightness level to the LED
     Current Ratio expressed as (full current) /(n * 32).
     i.e. 1 = 1/32 full current. Zero indicates LED is powered off.
     The table is intended to allow the brightness level to be "tuned"
     to compensate for non-linearity of brightness relative to current.
 */
-static const unsigned short ktd253CurrentRatioLookupTable[] = {
+static const unsigned short ktd259CurrentRatioLookupTable[] = {
 0,	/* (0/32)		KTD259_BACKLIGHT_OFF */
 30,	/* (1/32)		KTD259_MIN_CURRENT_RATIO */
 39,	/* (2/32) */
@@ -1685,20 +1673,20 @@ static const unsigned short ktd253CurrentRatioLookupTable[] = {
 255	/* (32/32)	KTD259_MAX_CURRENT_RATIO */
 };
 
-static struct ktd253x_bl_platform_data kyle_bl_platform_info = {
+static struct ktd259x_bl_platform_data kyle_bl_platform_info = {
 	.bl_name			= "pwm-backlight",
 	.ctrl_gpio			= KYLE_GPIO_LCD_BL_CTRL,
 	.ctrl_high			= 1,
 	.ctrl_low			= 0,
 	.max_brightness			= 255,
-	.brightness_to_current_ratio	= ktd253CurrentRatioLookupTable,
+	.brightness_to_current_ratio	= ktd259CurrentRatioLookupTable,
 
 	/* Control backlight on/off via callback function to synchronise with display on/off */
 	.external_bl_control		= true,
 };
 
 static struct platform_device kyle_backlight_device = {
-	.name = BL_DRIVER_NAME_KTD253,
+	.name = BL_DRIVER_NAME_KTD259,
 	.id = -1,
 	.dev = {
 		.platform_data = &kyle_bl_platform_info,
@@ -1858,7 +1846,7 @@ static struct platform_device *platform_devs[] __initdata = {
 #ifdef CONFIG_RFKILL
 	&sec_device_rfkill,
 #endif
-#if defined(CONFIG_BACKLIGHT_KTD253)
+#if defined(CONFIG_BACKLIGHT_KTD259)
 	&kyle_backlight_device,
 #endif
 #ifdef CONFIG_ANDROID_TIMED_GPIO
