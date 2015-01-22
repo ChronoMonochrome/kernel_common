@@ -680,7 +680,9 @@ static u8 sdhci_calc_timeout(struct sdhci_host *host, struct mmc_command *cmd)
 			break;
 	}
 
-	if (count >= 0xF)
+	if (count >= 0xF) {
+		pr_warning("%s: Too large timeout requested for CMD%d!\n",
+		       mmc_hostname(host->mmc), cmd->opcode);
 		count = 0xE;
 
 	return count;
@@ -1398,7 +1400,8 @@ static void sdhci_do_set_ios(struct sdhci_host *host, struct mmc_ios *ios)
 		    (ios->timing == MMC_TIMING_UHS_SDR50) ||
 		    (ios->timing == MMC_TIMING_UHS_SDR104) ||
 		    (ios->timing == MMC_TIMING_UHS_DDR50) ||
-		    (ios->timing == MMC_TIMING_UHS_SDR25))
+		    (ios->timing == MMC_TIMING_UHS_SDR25) ||
+		    (ios->timing == MMC_TIMING_UHS_SDR12))
 			ctrl |= SDHCI_CTRL_HISPD;
 
 		ctrl_2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
@@ -1957,13 +1960,12 @@ static void sdhci_tasklet_card(unsigned long param)
 
 	spin_lock_irqsave(&host->lock, flags);
 
-	/* Check host->mrq first in case we are runtime suspended */
-	if (host->mrq &&
-	    !(sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)) {
-		pr_err("%s: Card removed during transfer!\n",
-			mmc_hostname(host->mmc));
-		pr_err("%s: Resetting controller.\n",
-			mmc_hostname(host->mmc));
+	if (!(sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)) {
+		if (host->mrq) {
+			pr_err(KERN_ERR "%s: Card removed during transfer!\n",
+				mmc_hostname(host->mmc));
+			pr_err(KERN_ERR "%s: Resetting controller.\n",
+				mmc_hostname(host->mmc));
 
 		sdhci_reset(host, SDHCI_RESET_CMD);
 		sdhci_reset(host, SDHCI_RESET_DATA);
@@ -1997,6 +1999,9 @@ static void sdhci_tasklet_finish(unsigned long param)
 	}
 
 	del_timer(&host->timer);
+
+	if (host->version >= SDHCI_SPEC_300)
+		del_timer(&host->tuning_timer);
 
 	mrq = host->mrq;
 
@@ -2351,7 +2356,10 @@ again:
 	intmask &= ~SDHCI_INT_CARD_INT;
 
 	if (intmask) {
-		unexpected |= intmask;
+		pr_err("%s: Unexpected interrupt 0x%08x.\n",
+			mmc_hostname(host->mmc), intmask);
+		sdhci_dumpregs(host);
+
 		sdhci_writel(host, intmask, SDHCI_INT_STATUS);
 	}
 
@@ -2396,11 +2404,11 @@ int sdhci_suspend_host(struct sdhci_host *host)
 	sdhci_disable_card_detection(host);
 
 	/* Disable tuning since we are suspending */
-	has_tuning_timer = host->version >= SDHCI_SPEC_300 &&
-		host->tuning_count && host->tuning_mode == SDHCI_TUNING_MODE_1;
-	if (has_tuning_timer) {
-		del_timer_sync(&host->tuning_timer);
+	if (host->version >= SDHCI_SPEC_300 && host->tuning_count &&
+	    host->tuning_mode == SDHCI_TUNING_MODE_1) {
 		host->flags &= ~SDHCI_NEEDS_RETUNING;
+		mod_timer(&host->tuning_timer, jiffies +
+			host->tuning_count * HZ);
 	}
 
 	ret = mmc_suspend_host(host->mmc);
@@ -2704,6 +2712,21 @@ int sdhci_add_host(struct sdhci_host *host)
 		host->max_clk = host->ops->get_max_clock(host);
 	}
 
+	host->timeout_clk =
+		(caps[0] & SDHCI_TIMEOUT_CLK_MASK) >> SDHCI_TIMEOUT_CLK_SHIFT;
+	if (host->timeout_clk == 0) {
+		if (host->ops->get_timeout_clock) {
+			host->timeout_clk = host->ops->get_timeout_clock(host);
+		} else if (!(host->quirks &
+				SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK)) {
+			pr_err("%s: Hardware doesn't specify timeout clock "
+			       "frequency.\n", mmc_hostname(mmc));
+			return -ENODEV;
+		}
+	}
+	if (caps[0] & SDHCI_TIMEOUT_CLK_UNIT)
+		host->timeout_clk *= 1000;
+
 	/*
 	 * In case of Host Controller v3.00, find out whether clock
 	 * multiplier is supported.
@@ -2819,7 +2842,7 @@ int sdhci_add_host(struct sdhci_host *host)
 		mmc->caps |= MMC_CAP_DRIVER_TYPE_D;
 
 	/*
-	 * If Power Off Notify capability is enabled by the host,
+	 * If Power Off Notify capability is enabled by the host, 
 	 * set notify to short power off notify timeout value.
 	 */
 	if (mmc->caps2 & MMC_CAP2_POWEROFF_NOTIFY)
