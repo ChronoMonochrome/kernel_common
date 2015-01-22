@@ -263,18 +263,16 @@ restart:	adr	r0, LC0
 		mov	r1, r6
 		sub	r2, sp, r6
 		bl	atags_to_fdt
-
 		/*
 		 * If returned value is 1, there is no ATAG at the location
 		 * pointed by r8.  Try the typical 0x100 offset from start
 		 * of RAM and hope for the best.
 		 */
 		cmp	r0, #1
-		sub	r0, r4, #TEXT_OFFSET
-		add	r0, r0, #0x100
+		sub	r0, r4, #(TEXT_OFFSET - 0x100)
 		mov	r1, r6
 		sub	r2, sp, r6
-		bleq	atags_to_fdt
+		blne	atags_to_fdt
 
 		ldmfd	sp!, {r0-r3, ip, lr}
 		sub	sp, sp, #0x10000
@@ -1100,6 +1098,16 @@ iflush:
 		mcr	p15, 0, r10, c7, c5, 0	@ invalidate I+BTB
 		mcr	p15, 0, r10, c7, c10, 4	@ DSB
 		mcr	p15, 0, r10, c7, c5, 4	@ ISB
+
+#if defined(CONFIG_MACH_SAMSUNG_U8500) || defined(CONFIG_MACH_SAMSUNG_UX500)
+		mov	r2, #0xFF			@ clean & invalidate L2 cache
+		ldr	r1, =0xA04127FC
+		str	r2, [r1]
+l2loop:
+		ldr	r2, [r1]
+		teq	r2, #0
+		bne	l2loop
+#endif
 		mov	pc, lr
 
 __armv5tej_mmu_cache_flush:
