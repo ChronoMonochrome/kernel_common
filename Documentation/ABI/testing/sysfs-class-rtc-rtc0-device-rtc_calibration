@@ -10,3 +10,4 @@ Description:    The rtc_calibration attribute allows the userspace to
                 30.5 micro-seconds (half-parts-per-million of the 32KHz clock)
 Users:          The /vendor/st-ericsson/base_utilities/core/rtc_calibration
                 daemon uses this interface.
+
