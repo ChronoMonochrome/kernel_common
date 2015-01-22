@@ -9,9 +9,8 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
-#ifndef __PLAT_NOMADIK_GPIO
-#define __PLAT_NOMADIK_GPIO
+#ifndef __GPIO_NOMADIK_H
+#define __GPIO_NOMADIK_H
 
 /*
  * "nmk_gpio" and "NMK_GPIO" stand for "Nomadik GPIO", leaving
@@ -29,6 +28,7 @@
 #define NMK_GPIO_SLPC	0x1c
 #define NMK_GPIO_AFSLA	0x20
 #define NMK_GPIO_AFSLB	0x24
+#define NMK_GPIO_LOWEMI	0x28
 
 #define NMK_GPIO_RIMSC	0x40
 #define NMK_GPIO_FIMSC	0x44
@@ -85,4 +85,4 @@ struct nmk_gpio_platform_data {
 	bool supports_sleepmode;
 };
 
-#endif /* __PLAT_NOMADIK_GPIO */
+#endif
