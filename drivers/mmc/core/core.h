@@ -59,6 +59,9 @@ static inline void mmc_delay(unsigned int ms)
 void mmc_rescan(struct work_struct *work);
 void mmc_start_host(struct mmc_host *host);
 void mmc_stop_host(struct mmc_host *host);
+void mmc_resume_work(struct work_struct *work);
+
+int _mmc_detect_card_removed(struct mmc_host *host);
 
 int _mmc_detect_card_removed(struct mmc_host *host);
 
@@ -76,5 +79,6 @@ void mmc_remove_host_debugfs(struct mmc_host *host);
 void mmc_add_card_debugfs(struct mmc_card *card);
 void mmc_remove_card_debugfs(struct mmc_card *card);
 
+void stedma40_dump_state(void);
 #endif
 
