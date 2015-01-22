@@ -614,8 +614,8 @@ static int cfspi_init(struct net_device *dev)
 	}
 
 	/* Allocate DMA buffers. */
-	cfspi->xfer.va_tx[0] = dma_alloc(&cfspi->xfer.pa_tx[0]);
-	if (!cfspi->xfer.va_tx[0]) {
+	cfspi->xfer.va_tx = dma_alloc(&cfspi->xfer.pa_tx);
+	if (!cfspi->xfer.va_tx) {
 		res = -ENODEV;
 		goto err_dma_alloc_tx_0;
 	}
