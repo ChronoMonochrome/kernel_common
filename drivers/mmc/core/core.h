@@ -63,14 +63,12 @@ void mmc_resume_work(struct work_struct *work);
 
 int _mmc_detect_card_removed(struct mmc_host *host);
 
-int _mmc_detect_card_removed(struct mmc_host *host);
-
 int mmc_attach_mmc(struct mmc_host *host);
 int mmc_attach_sd(struct mmc_host *host);
 int mmc_attach_sdio(struct mmc_host *host);
 
 /* Module parameters */
-extern bool use_spi_crc;
+extern int use_spi_crc;
 
 /* Debugfs information for hosts and cards */
 void mmc_add_host_debugfs(struct mmc_host *host);
