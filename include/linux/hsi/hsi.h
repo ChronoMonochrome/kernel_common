@@ -1,4 +1,6 @@
 /*
+ * hsi.h
+ *
  * HSI core header file.
  *
  * Copyright (C) 2010 Nokia Corporation. All rights reserved.
@@ -26,9 +28,9 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/scatterlist.h>
+#include <linux/spinlock.h>
 #include <linux/list.h>
 #include <linux/module.h>
-#include <linux/notifier.h>
 
 /* HSI message ttype */
 #define HSI_MSG_READ	0
@@ -79,6 +81,8 @@ struct hsi_config {
 	unsigned int	mode;
 	unsigned int	channels;
 	unsigned int	speed;
+	/* ch_prio for TX only, Valid if arb_mode == HSI_ARB_PRIO */
+	unsigned char	ch_prio[HSI_MAX_CHANNELS];
 	union {
 		unsigned int	flow;		/* RX only */
 		unsigned int	arb_mode;	/* TX only */
@@ -97,7 +101,7 @@ struct hsi_config {
  */
 struct hsi_board_info {
 	const char		*name;
-	unsigned int		hsi_id;
+	int			hsi_id;
 	unsigned int		port;
 	struct hsi_config	tx_cfg;
 	struct hsi_config	rx_cfg;
@@ -121,18 +125,18 @@ static inline int hsi_register_board_info(struct hsi_board_info const *info,
  * @device: Driver model representation of the device
  * @tx_cfg: HSI TX configuration
  * @rx_cfg: HSI RX configuration
- * @e_handler: Callback for handling port events (RX Wake High/Low)
- * @pclaimed: Keeps tracks if the clients claimed its associated HSI port
- * @nb: Notifier block for port events
+ * @hsi_start_rx: Called after incoming wake line goes high
+ * @hsi_stop_rx: Called after incoming wake line goes low
  */
 struct hsi_client {
 	struct device		device;
 	struct hsi_config	tx_cfg;
 	struct hsi_config	rx_cfg;
+	void			(*hsi_start_rx)(struct hsi_client *cl);
+	void			(*hsi_stop_rx)(struct hsi_client *cl);
 	/* private: */
-	void			(*ehandler)(struct hsi_client *, unsigned long);
 	unsigned int		pclaimed:1;
-	struct notifier_block	nb;
+	struct list_head	link;
 };
 
 #define to_hsi_client(dev) container_of(dev, struct hsi_client, device)
@@ -146,10 +150,6 @@ static inline void *hsi_client_drvdata(struct hsi_client *cl)
 {
 	return dev_get_drvdata(&cl->device);
 }
-
-int hsi_register_port_event(struct hsi_client *cl,
-			void (*handler)(struct hsi_client *, unsigned long));
-int hsi_unregister_port_event(struct hsi_client *cl);
 
 /**
  * struct hsi_client_driver - Driver associated to an HSI client
@@ -181,8 +181,7 @@ static inline void hsi_unregister_client_driver(struct hsi_client_driver *drv)
  * @actual_len: Actual length of data transfered on completion
  * @channel: Channel were to TX/RX the message
  * @ttype: Transfer type (TX if set, RX otherwise)
- * @break_frame: if true HSI will send/receive a break frame. Data buffers are
- *		ignored in the request.
+ * @break_frame: if true HSI will send/receive a break frame (FRAME MODE)
  */
 struct hsi_msg {
 	struct list_head	link;
@@ -218,7 +217,8 @@ void hsi_free_msg(struct hsi_msg *msg);
  * @start_tx: Callback to inform that a client wants to TX data
  * @stop_tx: Callback to inform that a client no longer wishes to TX data
  * @release: Callback to inform that a client no longer uses the port
- * @n_head: Notifier chain for signaling port events to the clients.
+ * @clients: List of hsi_clients using the port.
+ * @clock: Lock to serialize access to the clients list.
  */
 struct hsi_port {
 	struct device			device;
@@ -234,14 +234,14 @@ struct hsi_port {
 	int				(*start_tx)(struct hsi_client *cl);
 	int				(*stop_tx)(struct hsi_client *cl);
 	int				(*release)(struct hsi_client *cl);
-	/* private */
-	struct atomic_notifier_head	n_head;
+	struct list_head		clients;
+	spinlock_t			clock;
 };
 
 #define to_hsi_port(dev) container_of(dev, struct hsi_port, device)
 #define hsi_get_port(cl) to_hsi_port((cl)->device.parent)
 
-int hsi_event(struct hsi_port *port, unsigned long event);
+void hsi_event(struct hsi_port *port, unsigned int event);
 int hsi_claim_port(struct hsi_client *cl, unsigned int share);
 void hsi_release_port(struct hsi_client *cl);
 
@@ -271,15 +271,15 @@ static inline void *hsi_port_drvdata(struct hsi_port *port)
 struct hsi_controller {
 	struct device		device;
 	struct module		*owner;
-	unsigned int		id;
+	int			id;
 	unsigned int		num_ports;
-	struct hsi_port		**port;
+	struct hsi_port		*port;
 };
 
 #define to_hsi_controller(dev) container_of(dev, struct hsi_controller, device)
 
 struct hsi_controller *hsi_alloc_controller(unsigned int n_ports, gfp_t flags);
-void hsi_put_controller(struct hsi_controller *hsi);
+void hsi_free_controller(struct hsi_controller *hsi);
 int hsi_register_controller(struct hsi_controller *hsi);
 void hsi_unregister_controller(struct hsi_controller *hsi);
 
@@ -297,35 +297,13 @@ static inline void *hsi_controller_drvdata(struct hsi_controller *hsi)
 static inline struct hsi_port *hsi_find_port_num(struct hsi_controller *hsi,
 							unsigned int num)
 {
-	return (num < hsi->num_ports) ? hsi->port[num] : NULL;
+	return (num < hsi->num_ports) ? &hsi->port[num] : NULL;
 }
 
 /*
  * API for HSI clients
  */
 int hsi_async(struct hsi_client *cl, struct hsi_msg *msg);
-
-/**
- * hsi_id - Get HSI controller ID associated to a client
- * @cl: Pointer to a HSI client
- *
- * Return the controller id where the client is attached to
- */
-static inline unsigned int hsi_id(struct hsi_client *cl)
-{
-	return	to_hsi_controller(cl->device.parent->parent)->id;
-}
-
-/**
- * hsi_port_id - Gets the port number a client is attached to
- * @cl: Pointer to HSI client
- *
- * Return the port number associated to the client
- */
-static inline unsigned int hsi_port_id(struct hsi_client *cl)
-{
-	return	to_hsi_port(cl->device.parent)->num;
-}
 
 /**
  * hsi_setup - Configure the client's port
