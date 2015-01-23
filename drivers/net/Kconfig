@@ -112,6 +112,8 @@ config MII
 
 source "drivers/ieee802154/Kconfig"
 
+if NET_CORE
+
 config IFB
 	tristate "Intermediate Functional Block support"
 	depends on NET_CLS_ACT
@@ -1101,8 +1103,6 @@ config DNET
 	  To compile this driver as a module, choose M here: the module
 	  will be called dnet.
 
-source "drivers/net/tulip/Kconfig"
-
 config AT1700
 	tristate "AT1700/1720 support (EXPERIMENTAL)"
 	depends on (ISA || MCA_LEGACY) && EXPERIMENTAL
@@ -1329,8 +1329,6 @@ config IBMVETH
 
 	  To compile this driver as a module, choose M here. The module will
 	  be called ibmveth.
-
-source "drivers/net/ibm_newemac/Kconfig"
 
 config NET_PCI
 	bool "EISA, VLB, PCI and on board controllers"
@@ -1909,16 +1907,6 @@ config 68360_ENET
 	  Say Y here if you want to use the built-in ethernet controller of
 	  the Motorola 68360 processor.
 
-config FEC
-	bool "FEC ethernet controller (of ColdFire and some i.MX CPUs)"
-	depends on M523x || M527x || M5272 || M528x || M520x || M532x || \
-		IMX_HAVE_PLATFORM_FEC || MXS_HAVE_PLATFORM_FEC
-	default IMX_HAVE_PLATFORM_FEC || MXS_HAVE_PLATFORM_FEC if ARM
-	select PHYLIB
-	help
-	  Say Y here if you want to use the built-in 10/100 Fast ethernet
-	  controller on some Motorola ColdFire and Freescale i.MX processors.
-
 config FEC_MPC52xx
 	tristate "MPC52xx FEC driver"
 	depends on PPC_MPC52xx && PPC_BESTCOMM
@@ -1990,11 +1978,6 @@ config LANTIQ_ETOP
 	depends on SOC_TYPE_XWAY
 	help
 	  Support for the MII0 inside the Lantiq SoC
-
-
-source "drivers/net/fs_enet/Kconfig"
-
-source "drivers/net/octeon/Kconfig"
 
 endif # NET_ETHERNET
 
@@ -2162,8 +2145,6 @@ config IGBVF
 
 	  To compile this driver as a module, choose M here. The module
 	  will be called igbvf.
-
-source "drivers/net/ixp2000/Kconfig"
 
 config MYRI_SBUS
 	tristate "MyriCOM Gigabit Ethernet support"
@@ -2507,8 +2488,6 @@ config S6GMAC
 
 	  To compile this driver as a module, choose M here. The module
 	  will be called s6gmac.
-
-source "drivers/net/stmmac/Kconfig"
 
 config PCH_GBE
 	tristate "Intel EG20T PCH / OKI SEMICONDUCTOR ML7223 IOH GbE"
@@ -2891,10 +2870,6 @@ config BNA
 
 	  <http://support.brocade.com>
 
-source "drivers/net/sfc/Kconfig"
-
-source "drivers/net/benet/Kconfig"
-
 endif # NETDEV_10000
 
 source "drivers/net/tokenring/Kconfig"
@@ -2904,8 +2879,6 @@ source "drivers/net/wireless/Kconfig"
 source "drivers/net/wimax/Kconfig"
 
 source "drivers/net/usb/Kconfig"
-
-source "drivers/net/pcmcia/Kconfig"
 
 source "drivers/net/wan/Kconfig"
 
