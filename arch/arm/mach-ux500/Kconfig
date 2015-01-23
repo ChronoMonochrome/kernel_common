@@ -24,17 +24,7 @@ config UX500_SOC_DB5500
 config UX500_SOC_DB8500
 	bool "DB8500"
 	select UX500_SOC_DBX500
-
-menu "Ux500 target platform (boards)"
-
-config MACH_MOP500
-	bool "U8500 Development platform, MOP500 versions"
-	select UX500_SOC_DB8500
-	select I2C
-	select I2C_NOMADIK
-	select SOC_BUS
-	help
-	  Include support for the MOP500 development platform.
+endmenu
 
 menu "Ux500 target platform (boards)"
 
