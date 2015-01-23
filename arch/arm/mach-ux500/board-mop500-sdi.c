@@ -55,12 +55,6 @@ void mop500_sdi_reset(struct device *dev)
 }
 
 /*
- * v2 has a new version of this block that need to be forced, the number found
- * in hardware is incorrect
- */
-#define U8500_SDI_V2_PERIPHID 0x10480180
-
-/*
  * SDI 0 (MicroSD slot)
  */
 
@@ -244,49 +238,13 @@ static void sdi0_sdi1_configure(void)
 	db8500_add_sdi1(&mop500_sdi1_data, periphid);
 }
 
-void mop500_sdi_tc35892_init(struct device *parent)
+void mop500_sdi_tc35892_init(void)
 {
 	mop500_sdi0_data.gpio_cd = GPIO_SDMMC_CD;
 	sdi0_en = GPIO_SDMMC_EN;
 	sdi0_vsel = GPIO_SDMMC_1V8_3V_SEL;
 	sdi0_sdi1_configure();
 }
-
-/*
- * SDI1 (SDIO WLAN)
- */
-#ifdef CONFIG_STE_DMA40
-static struct stedma40_chan_cfg sdi1_dma_cfg_rx = {
-	.mode = STEDMA40_MODE_LOGICAL,
-	.dir = STEDMA40_PERIPH_TO_MEM,
-	.src_dev_type = DB8500_DMA_DEV32_SD_MM1_RX,
-	.dst_dev_type = STEDMA40_DEV_DST_MEMORY,
-	.src_info.data_width = STEDMA40_WORD_WIDTH,
-	.dst_info.data_width = STEDMA40_WORD_WIDTH,
-};
-
-static struct stedma40_chan_cfg sdi1_dma_cfg_tx = {
-	.mode = STEDMA40_MODE_LOGICAL,
-	.dir = STEDMA40_MEM_TO_PERIPH,
-	.src_dev_type = STEDMA40_DEV_SRC_MEMORY,
-	.dst_dev_type = DB8500_DMA_DEV32_SD_MM1_TX,
-	.src_info.data_width = STEDMA40_WORD_WIDTH,
-	.dst_info.data_width = STEDMA40_WORD_WIDTH,
-};
-#endif
-
-static struct mmci_platform_data mop500_sdi1_data = {
-	.ocr_mask	= MMC_VDD_29_30,
-	.f_max		= 50000000,
-	.capabilities	= MMC_CAP_4_BIT_DATA,
-	.gpio_cd	= -1,
-	.gpio_wp	= -1,
-#ifdef CONFIG_STE_DMA40
-	.dma_filter	= stedma40_filter,
-	.dma_rx_param	= &sdi1_dma_cfg_rx,
-	.dma_tx_param	= &sdi1_dma_cfg_tx,
-#endif
-};
 
 /*
  * SDI 2 (POP eMMC, not on DB8500ed)
@@ -372,7 +330,7 @@ static struct mmci_platform_data mop500_sdi4_data = {
 #endif
 };
 
-void __init mop500_sdi_init(struct device *parent)
+void __init mop500_sdi_init(void)
 {
 	/* v2 has a new version of this block that need to be forced */
 	u32 periphid = 0x10480180;
@@ -382,7 +340,7 @@ void __init mop500_sdi_init(struct device *parent)
 		db8500_add_sdi2(&mop500_sdi2_data, periphid);
 
 	/* On-board eMMC */
-	db8500_add_sdi4(parent, &mop500_sdi4_data, U8500_SDI_V2_PERIPHID);
+	db8500_add_sdi4(&mop500_sdi4_data, periphid);
 
 	if (machine_is_hrefv60() || machine_is_u8520() ||
 	    machine_is_snowball() || machine_is_u9540()) {
@@ -408,33 +366,4 @@ void __init mop500_sdi_init(struct device *parent)
 	 * be added when the TC35892 initializes and calls
 	 * mop500_sdi_tc35892_init() above.
 	 */
-}
-
-void __init snowball_sdi_init(struct device *parent)
-{
-	/* On Snowball MMC_CAP_SD_HIGHSPEED isn't supported (Hardware issue?) */
-	mop500_sdi0_data.capabilities &= ~MMC_CAP_SD_HIGHSPEED;
-	/* On-board eMMC */
-	db8500_add_sdi4(parent, &mop500_sdi4_data, U8500_SDI_V2_PERIPHID);
-	/* External Micro SD slot */
-	mop500_sdi0_data.gpio_cd = SNOWBALL_SDMMC_CD_GPIO;
-	mop500_sdi0_data.cd_invert = true;
-	sdi0_en = SNOWBALL_SDMMC_EN_GPIO;
-	sdi0_vsel = SNOWBALL_SDMMC_1V8_3V_GPIO;
-	sdi0_configure(parent);
-}
-
-void __init hrefv60_sdi_init(struct device *parent)
-{
-	/* PoP:ed eMMC */
-	db8500_add_sdi2(parent, &mop500_sdi2_data, U8500_SDI_V2_PERIPHID);
-	/* On-board eMMC */
-	db8500_add_sdi4(parent, &mop500_sdi4_data, U8500_SDI_V2_PERIPHID);
-	/* External Micro SD slot */
-	mop500_sdi0_data.gpio_cd = HREFV60_SDMMC_CD_GPIO;
-	sdi0_en = HREFV60_SDMMC_EN_GPIO;
-	sdi0_vsel = HREFV60_SDMMC_1V8_3V_GPIO;
-	sdi0_configure(parent);
-	/* WLAN SDIO channel */
-	db8500_add_sdi1(parent, &mop500_sdi1_data, U8500_SDI_V2_PERIPHID);
 }
