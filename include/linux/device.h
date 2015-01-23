@@ -931,10 +931,6 @@ int _dev_info(const struct device *dev, const char *fmt, ...)
 
 #endif
 
-#if (defined(CONFIG_SAMSUNG_LOG_BUF) || defined(DEBUG))
-#define dev_samsung_dbg(dev, format, arg...)		\
-	dev_printk(KERN_DEBUG , dev , format , ## arg)
-#endif
 /*
  * Stupid hackaround for existing uses of non-printk uses dev_info
  *
