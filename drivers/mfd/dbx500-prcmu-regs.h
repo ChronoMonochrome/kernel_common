@@ -80,9 +80,6 @@
 
 /* ARM WFI Standby signal register */
 #define PRCM_ARM_WFI_STANDBY    (_PRCMU_BASE + 0x130)
-#define PRCM_ARM_WFI_STANDBY_WFI0               0x08
-#define PRCM_ARM_WFI_STANDBY_WFI1               0x10
-
 #define PRCM_IOCR		(_PRCMU_BASE + 0x310)
 #define PRCM_IOCR_IOFORCE			0x1
 
@@ -127,7 +124,6 @@
 #define PRCM_ITSTATUS4		(_PRCMU_BASE + 0x168)
 #define PRCM_ITSTATUS5		(_PRCMU_BASE + 0x484)
 #define PRCM_ITCLEAR5		(_PRCMU_BASE + 0x488)
-#define PRCM_ARMIT_MASKXP70_IT	(_PRCMU_BASE + 0x1018)
 
 /* System reset register */
 #define PRCM_APE_SOFTRST	(_PRCMU_BASE + 0x228)
