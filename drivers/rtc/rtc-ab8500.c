@@ -15,7 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/rtc.h>
 #include <linux/mfd/abx500.h>
-#include <linux/mfd/abx500/ab8500.h>
+#include <linux/mfd/ab8500.h>
 #include <linux/delay.h>
 #include <linux/ktime.h>
 #include <linux/jiffies.h>
@@ -628,8 +628,18 @@ static struct platform_driver ab8500_rtc_driver = {
 	.resume = ab8500_rtc_resume,
 };
 
-module_platform_driver(ab8500_rtc_driver);
+static int __init ab8500_rtc_init(void)
+{
+	return platform_driver_register(&ab8500_rtc_driver);
+}
 
+static void __exit ab8500_rtc_exit(void)
+{
+	platform_driver_unregister(&ab8500_rtc_driver);
+}
+
+module_init(ab8500_rtc_init);
+module_exit(ab8500_rtc_exit);
 MODULE_AUTHOR("Virupax Sadashivpetimath <virupax.sadashivpetimath@stericsson.com>");
 MODULE_DESCRIPTION("AB8500 RTC Driver");
 MODULE_LICENSE("GPL v2");
