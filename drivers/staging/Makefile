@@ -3,25 +3,19 @@
 # fix for build system bug...
 obj-$(CONFIG_STAGING)		+= staging.o
 
-<<<<<<< HEAD
 obj-y				+= serial/
 obj-y				+= media/
-=======
 obj-y += tty/
 obj-y += generic_serial/
 obj-y += pasr/
->>>>>>> c93ae66... 00114_drivers_staging_pasr
 obj-$(CONFIG_ET131X)		+= et131x/
 obj-$(CONFIG_SLICOSS)		+= slicoss/
 obj-$(CONFIG_USBIP_CORE)	+= usbip/
 obj-$(CONFIG_W35UND)		+= winbond/
 obj-$(CONFIG_PRISM2_USB)	+= wlan-ng/
 obj-$(CONFIG_ECHO)		+= echo/
-<<<<<<< HEAD
-=======
 obj-$(CONFIG_BRCMFMAC)		+= brcm80211/
 obj-$(CONFIG_CG2900)		+= cg2900/
->>>>>>> c93ae66... 00114_drivers_staging_pasr
 obj-$(CONFIG_COMEDI)		+= comedi/
 obj-$(CONFIG_FB_OLPC_DCON)	+= olpc_dcon/
 obj-$(CONFIG_ASUS_OLED)		+= asus_oled/
@@ -63,17 +57,14 @@ obj-$(CONFIG_TOUCHSCREEN_CLEARPAD_TM1217)	+= cptm1217/
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)	+= ste_rmi4/
 obj-$(CONFIG_INTEL_MEI)		+= mei/
 obj-$(CONFIG_MFD_NVEC)		+= nvec/
-<<<<<<< HEAD
 obj-$(CONFIG_DRM_OMAP)		+= omapdrm/
 obj-$(CONFIG_ANDROID)		+= android/
 obj-$(CONFIG_PHONE)		+= telephony/
 obj-$(CONFIG_RAMSTER)		+= ramster/
 obj-$(CONFIG_USB_WPAN_HCD)	+= ozwpan/
-=======
 #obj-$(CONFIG_CW1200)   		+= cw1200/
 obj-$(CONFIG_U8500_MMIO)	+= mmio/
 obj-$(CONFIG_U8500_FLASH)	+= camera_flash/
 obj-$(CONFIG_U8500_CM)		+= nmf-cm/
 obj-$(CONFIG_AB5500_SIM)	+= ab5500_sim/
 obj-$(CONFIG_CWXXXX_ETF)	+= etf_drivers/
->>>>>>> c93ae66... 00114_drivers_staging_pasr
