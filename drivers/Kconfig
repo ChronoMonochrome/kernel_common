@@ -2,6 +2,8 @@ menu "Device Drivers"
 
 source "drivers/base/Kconfig"
 
+source "drivers/battery/Kconfig"
+
 source "drivers/connector/Kconfig"
 
 source "drivers/mtd/Kconfig"
@@ -98,6 +100,8 @@ source "drivers/leds/Kconfig"
 
 source "drivers/switch/Kconfig"
 
+source "drivers/switch/Kconfig"
+
 source "drivers/accessibility/Kconfig"
 
 source "drivers/infiniband/Kconfig"
@@ -128,6 +132,8 @@ source "drivers/platform/Kconfig"
 
 source "drivers/clk/Kconfig"
 
+source "drivers/tee/Kconfig"
+
 source "drivers/hwspinlock/Kconfig"
 
 source "drivers/clocksource/Kconfig"
@@ -142,4 +148,15 @@ source "drivers/virt/Kconfig"
 
 source "drivers/devfreq/Kconfig"
 
+source "drivers/modem/Kconfig"
+
+source "drivers/samsung/Kconfig"
+
+source "drivers/sensor/Kconfig"
+
+source "drivers/phone_svn/Kconfig"
+
+source "drivers/interceptor/Kconfig" 
+
 endmenu
+
