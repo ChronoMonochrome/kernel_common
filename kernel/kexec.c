@@ -1094,6 +1094,8 @@ void crash_kexec(struct pt_regs *regs)
 	if (mutex_trylock(&kexec_mutex)) {
 		if (kexec_crash_image) {
 
+			kmsg_dump(KMSG_DUMP_KEXEC);
+
 			crash_setup_regs(&fixed_regs, regs);
 			crash_save_vmcoreinfo();
 			machine_crash_shutdown(&fixed_regs);
