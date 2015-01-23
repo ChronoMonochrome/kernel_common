@@ -124,14 +124,6 @@ config USB_MUSB_OTG
 
 endchoice
 
-# enable peripheral support (including with OTG)
-config USB_GADGET_MUSB_HDRC
-	bool
-	depends on USB_MUSB_HDRC && (USB_MUSB_PERIPHERAL || USB_MUSB_OTG)
-#	default y
-#	select USB_GADGET_DUALSPEED
-#	select USB_GADGET_SELECTED
-
 # enables host support (including with OTG)
 config USB_MUSB_HDRC_HCD
 	bool
