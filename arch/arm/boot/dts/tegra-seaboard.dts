@@ -1,16 +1,28 @@
 /dts-v1/;
 
+<<<<<<< HEAD
+=======
+/memreserve/ 0x1c000000 0x04000000;
+>>>>>>> 21aa78d... 00003_arch_arm_boot_dts
 /include/ "tegra20.dtsi"
 
 / {
 	model = "NVIDIA Seaboard";
 	compatible = "nvidia,seaboard", "nvidia,tegra20";
 
+<<<<<<< HEAD
+=======
+	chosen {
+		bootargs = "vmalloc=192M video=tegrafb console=ttyS0,115200n8 root=/dev/mmcblk1p3 rw rootwait";
+	};
+
+>>>>>>> 21aa78d... 00003_arch_arm_boot_dts
 	memory {
 		device_type = "memory";
 		reg = < 0x00000000 0x40000000 >;
 	};
 
+<<<<<<< HEAD
 	i2c@7000c000 {
 		clock-frequency = <400000>;
 
@@ -84,10 +96,13 @@
 		status = "disable";
 	};
 
+=======
+>>>>>>> 21aa78d... 00003_arch_arm_boot_dts
 	serial@70006300 {
 		clock-frequency = < 216000000 >;
 	};
 
+<<<<<<< HEAD
 	serial@70006400 {
 		status = "disable";
 	};
@@ -171,5 +186,11 @@
 				0x007d8010 0x00000000 0x00000000 0x00000000
 				0x00000000 0x00000000 0x00000000 0x00000000 >;
 		};
+=======
+	sdhci@c8000400 {
+		gpios = <&gpio 69 0>, /* cd, gpio PI5 */
+			<&gpio 57 0>, /* wp, gpio PH1 */
+			<&gpio 70 0>; /* power, gpio PI6 */
+>>>>>>> 21aa78d... 00003_arch_arm_boot_dts
 	};
 };
