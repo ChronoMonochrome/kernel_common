@@ -339,27 +339,6 @@ config EARLY_PRINTK
 	  kernel low-level debugging functions. Add earlyprintk to your
 	  kernel parameters to enable this console.
 
-config PRINTK_LL
-	bool "Use printascii in printk"
-	depends on DEBUG_LL
-	help
-	  Say Y here if you want to have printk send its output via the
-	  kernel low-level debugging functions.  This is useful if you
-	  are debugging code that executes before the earlyprintk console
-	  is initialized.
-
-config DEBUG_ICEDCC
-	bool "Kernel low-level debugging via EmbeddedICE DCC channel"
-	depends on DEBUG_LL
-	help
-	  Say Y here if you want the debug print routines to direct their
-	  output to the EmbeddedICE macrocell's DCC channel using
-	  co-processor 14. This is known to work on the ARM9 style ICE
-	  channel and on the XScale with the PEEDI.
-
-	  It does include a timeout to ensure that the system does not
-	  totally freeze when there is nothing connected to read.
-
 config OC_ETM
 	bool "On-chip ETM and ETB"
 	depends on ARM_AMBA
