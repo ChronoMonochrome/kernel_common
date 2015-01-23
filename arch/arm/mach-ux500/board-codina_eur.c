@@ -37,6 +37,7 @@
 #include <linux/delay.h>
 #include <linux/mfd/abx500/ab8500-denc.h>
 #include <linux/spi/stm_msp.h>
+#include <asm/hardware/gic.h>
 #include <plat/gpio-nomadik.h>
 #include <linux/input/bt404_ts.h>
 #include <linux/leds.h>
@@ -2562,6 +2563,7 @@ MACHINE_START(CODINA, "SAMSUNG CODINA")
 	.map_io		= u8500_map_io,
 	.init_irq	= ux500_init_irq,
 	.timer		= &ux500_timer,
+	.handle_irq     = gic_handle_irq,
 	.init_machine	= codina_init_machine,
 	.restart	= ux500_restart,
 MACHINE_END
