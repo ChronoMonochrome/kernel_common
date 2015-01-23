@@ -43,7 +43,11 @@
 
 struct cputopo_arm cpu_topology[NR_CPUS];
 
+<<<<<<< HEAD
 const struct cpumask *cpu_coregroup_mask(int cpu)
+=======
+const struct cpumask *cpu_coregroup_mask(unsigned int cpu)
+>>>>>>> f54fd3c... 00014_arch_arm_kernel
 {
 	return &cpu_topology[cpu].core_sibling;
 }

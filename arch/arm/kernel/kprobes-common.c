@@ -13,7 +13,6 @@
 
 #include <linux/kernel.h>
 #include <linux/kprobes.h>
-#include <asm/system_info.h>
 
 #include "kprobes.h"
 
