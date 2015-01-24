@@ -767,6 +767,7 @@ struct irq_domain_ops {
 struct irq_domain {
 	struct list_head list;
 	unsigned int irq_base;
+	unsigned int nr_irq;
 	const struct irq_domain_ops *ops;
 	void *priv;
 
