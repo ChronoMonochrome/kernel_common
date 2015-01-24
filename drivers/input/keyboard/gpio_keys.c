@@ -25,8 +25,6 @@
 #include <linux/gpio_keys.h>
 #include <linux/workqueue.h>
 #include <linux/gpio.h>
-#include <linux/of_platform.h>
-#include <linux/of_gpio.h>
 #include <linux/pm_runtime.h>
 #ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
 #include <mach/sec_common.h>
