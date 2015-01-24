@@ -42,6 +42,10 @@
 	((1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_LOCAL_IN))
 
 
+extern void xt_socket_put_sk(struct sock *sk);
+extern struct sock* xt_socket_get4_sk(const struct sk_buff *skb, struct xt_action_param *par);
+extern struct sock*xt_socket_get6_sk(const struct sk_buff *skb, struct xt_action_param *par);
+	
 static const char *module_procdirname = "xt_qtaguid";
 static struct proc_dir_entry *xt_qtaguid_procdir;
 
