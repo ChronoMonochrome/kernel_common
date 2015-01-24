@@ -483,3 +483,4 @@ static inline unsigned int mmc_host_clk_rate(struct mmc_host *host)
 #endif
 
 #endif
+
