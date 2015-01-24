@@ -55,9 +55,6 @@ obj-$(CONFIG_INPUT_WISTRON_BTNS)	+= wistron_btns.o
 obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
 obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
-<<<<<<< HEAD
-=======
 obj-$(CONFIG_INPUT_STE_FF_VIBRA)	+= ste_ff_vibra.o
 obj-$(CONFIG_INPUT_AB8505_MICRO_USB_DETECT)	+= ab8505_micro_usb_iddet.o
 obj-$(CONFIG_INPUT_MPU6050)		+= mpu6050_input.o mpu6050_selftest.o
->>>>>>> 191227b... 00011_drivers_input_misc_Makefile
