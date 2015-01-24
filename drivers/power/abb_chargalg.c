@@ -470,7 +470,7 @@ static int ab8500_chargalg_check_charger_connection(struct ab8500_chargalg *di)
 		 */
 		if ((di->chg_info.conn_chg & AC_CHG) &&
 			!di->susp_status.ac_suspended) {
-			dev_samsung_dbg(di->dev, "Charging source is AC\n");
+			//dev_samsung_dbg(di->dev, "Charging source is AC\n");
 			if (di->chg_info.charger_type != AC_CHG) {
 				di->chg_info.charger_type = AC_CHG;
 				di->charge_timeout_jiffies=jiffies + get_charge_timeout_duration(di);
