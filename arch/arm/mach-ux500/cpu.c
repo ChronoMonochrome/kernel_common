@@ -168,6 +168,8 @@ static void ux500_l2x0_inv_all(void)
 	ux500_cache_sync();
 }
 
+#define L2X0_LOCKDOWN_STRIDE 0x08
+
 static int __init ux500_l2x0_unlock(void)
 {
 	int i;
