@@ -65,7 +65,7 @@ static void ux500_tx_work(struct work_struct *data)
 	struct musb *musb = hw_ep->musb;
 	unsigned long flags;
 
-	DBG(4, "DMA tx transfer done on hw_ep=%d\n", hw_ep->epnum);
+//	DBG(4, "DMA tx transfer done on hw_ep=%d\n", hw_ep->epnum);
 
 	spin_lock_irqsave(&musb->lock, flags);
 	ux500_channel->channel.actual_len = ux500_channel->cur_len;
