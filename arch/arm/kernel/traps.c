@@ -24,12 +24,10 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/sched.h>
-
-#include <linux/atomic.h>
 #ifdef CONFIG_SAMSUNG_LOG_BUF
 #include <linux/mfd/ux500_wdt.h>
 #endif
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <asm/cacheflush.h>
 #include <asm/system.h>
 #include <asm/unistd.h>
