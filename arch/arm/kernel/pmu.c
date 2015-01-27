@@ -31,7 +31,7 @@ static int __devinit pmu_register(struct platform_device *pdev,
 {
 	if (type < 0 || type >= ARM_NUM_PMU_DEVICES) {
 		pr_warning("received registration request for unknown "
-				"PMU device type %d\n", type);
+				"device %d\n", type);
 		return -EINVAL;
 	}
 
@@ -112,17 +112,17 @@ static int __init register_pmu_driver(void)
 device_initcall(register_pmu_driver);
 
 struct platform_device *
-reserve_pmu(enum arm_pmu_type type)
+reserve_pmu(enum arm_pmu_type device)
 {
 	struct platform_device *pdev;
 
-	if (test_and_set_bit_lock(type, &pmu_lock)) {
+	if (test_and_set_bit_lock(device, &pmu_lock)) {
 		pdev = ERR_PTR(-EBUSY);
-	} else if (pmu_devices[type] == NULL) {
-		clear_bit_unlock(type, &pmu_lock);
+	} else if (pmu_devices[device] == NULL) {
+		clear_bit_unlock(device, &pmu_lock);
 		pdev = ERR_PTR(-ENODEV);
 	} else {
-		pdev = pmu_devices[type];
+		pdev = pmu_devices[device];
 	}
 
 	return pdev;
@@ -130,11 +130,11 @@ reserve_pmu(enum arm_pmu_type type)
 EXPORT_SYMBOL_GPL(reserve_pmu);
 
 int
-release_pmu(enum arm_pmu_type type)
+release_pmu(enum arm_pmu_type device)
 {
-	if (WARN_ON(!pmu_devices[type]))
+	if (WARN_ON(!pmu_devices[device]))
 		return -EINVAL;
-	clear_bit_unlock(type, &pmu_lock);
+	clear_bit_unlock(device, &pmu_lock);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(release_pmu);
@@ -182,17 +182,17 @@ init_cpu_pmu(void)
 }
 
 int
-init_pmu(enum arm_pmu_type type)
+init_pmu(enum arm_pmu_type device)
 {
 	int err = 0;
 
-	switch (type) {
+	switch (device) {
 	case ARM_PMU_DEVICE_CPU:
 		err = init_cpu_pmu();
 		break;
 	default:
-		pr_warning("attempt to initialise PMU of unknown "
-			   "type %d\n", type);
+		pr_warning("attempt to initialise unknown device %d\n",
+				device);
 		err = -EINVAL;
 	}
 

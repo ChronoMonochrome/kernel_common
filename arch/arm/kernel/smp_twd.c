@@ -219,8 +219,6 @@ void __cpuinit twd_timer_setup(struct clock_event_device *clk)
 	clk->set_mode = twd_set_mode;
 	clk->set_next_event = twd_set_next_event;
 
-	clockevents_register_device(clk);
-
 	/* Make sure our local interrupt controller has this enabled */
 	gic_enable_ppi(clk->irq);
 
