@@ -44,6 +44,8 @@
 #include <linux/syscalls.h>
 #include <linux/kprobes.h>
 #include <linux/user_namespace.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
 
 #include <linux/kmsg_dump.h>
 /* Move somewhere else to avoid recompiling? */
@@ -319,6 +321,7 @@ void kernel_restart_prepare(char *cmd)
 	system_state = SYSTEM_RESTART;
 	usermodehelper_disable();
 	device_shutdown();
+	disable_nonboot_cpus();
 	syscore_shutdown();
 }
 
@@ -417,6 +420,40 @@ EXPORT_SYMBOL_GPL(kernel_power_off);
 
 static DEFINE_MUTEX(reboot_mutex);
 
+#define REBOOT_TIMEOUT 5
+
+static int reboot_timer_expired(void *data)
+{
+	static DEFINE_MUTEX(lock);
+	unsigned long cmd = (unsigned long) data;
+	msleep(REBOOT_TIMEOUT * 1000);
+
+	mutex_lock(&lock);
+
+	printk(KERN_EMERG "Timer expired forcing power %s.\n",
+	       cmd == LINUX_REBOOT_CMD_POWER_OFF ? "off" : "reboot");
+
+	if (cmd == LINUX_REBOOT_CMD_POWER_OFF)
+	  machine_power_off();
+	else
+	  machine_restart(NULL);
+
+	mutex_unlock(&lock);
+	return 0;
+}
+
+static int reboot_timer_setup(unsigned long cmd)
+{
+	struct task_struct *task;
+
+	task = kthread_create(reboot_timer_expired, cmd, "reboot_rescue0");
+	kthread_bind(task, 0);
+	wake_up_process(task);
+	task = kthread_create(reboot_timer_expired, cmd, "reboot_rescue1");
+	kthread_bind(task, 1);
+	wake_up_process(task);
+}
+
 /*
  * Reboot system call: for obvious reasons only root may call it,
  * and even root needs to set up some magic numbers in the registers
@@ -452,6 +489,8 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	mutex_lock(&reboot_mutex);
 	switch (cmd) {
 	case LINUX_REBOOT_CMD_RESTART:
+		/* register the timer */
+		reboot_timer_setup(cmd);
 		kernel_restart(NULL);
 		break;
 
@@ -469,6 +508,8 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 		panic("cannot halt");
 
 	case LINUX_REBOOT_CMD_POWER_OFF:
+		/* register the timer */
+		reboot_timer_setup(cmd);
 		kernel_power_off();
 		do_exit(0);
 		break;
@@ -1164,6 +1205,36 @@ DECLARE_RWSEM(uts_sem);
 #else
 #define override_architecture(name)	0
 #endif
+
+/*
+ * Work around broken programs that cannot handle "Linux 3.0".
+ * Instead we map 3.x to 2.6.40+x, so e.g. 3.0 would be 2.6.40
+ */
+static int override_release(char __user *release, size_t len)
+{
+	int ret = 0;
+
+	if (current->personality & UNAME26) {
+		const char *rest = UTS_RELEASE;
+		char buf[65] = { 0 };
+		int ndots = 0;
+		unsigned v;
+		size_t copy;
+
+		while (*rest) {
+			if (*rest == '.' && ++ndots >= 3)
+				break;
+			if (!isdigit(*rest) && *rest != '.')
+				break;
+			rest++;
+		}
+		v = ((LINUX_VERSION_CODE >> 8) & 0xff) + 40;
+		copy = min(sizeof(buf), max_t(size_t, 1, len));
+		copy = scnprintf(buf, copy, "2.6.%u%s", v, rest);
+		ret = copy_to_user(release, buf, copy + 1);
+	}
+	return ret;
+}
 
 SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
 {
