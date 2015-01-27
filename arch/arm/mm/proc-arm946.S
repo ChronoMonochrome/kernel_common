@@ -410,7 +410,6 @@ __arm946_proc_info:
 	.long	0x41009460
 	.long	0xff00fff0
 	.long	0
-	.long	0
 	b	__arm946_setup
 	.long	cpu_arch_name
 	.long	cpu_elf_name
@@ -419,6 +418,6 @@ __arm946_proc_info:
 	.long	arm946_processor_functions
 	.long	0
 	.long	0
-	.long	arm946_cache_fns
+	.long	arm940_cache_fns
 	.size	__arm946_proc_info, . - __arm946_proc_info
 
