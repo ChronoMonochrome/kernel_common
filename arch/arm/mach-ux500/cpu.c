@@ -180,9 +180,9 @@ static int __init ux500_l2x0_unlock(void)
 	 * 8 sets of registers, one per possible CPU.
 	 */
 	for (i = 0; i < 8; i++) {
-		writel_relaxed(0x0, l2x0_base + L2X0_LOCKDOWN_WAY_D_BASE +
+		writel_relaxed(0x0, l2x0_base + L2X0_LOCKDOWN_WAY_D +
 			       i * L2X0_LOCKDOWN_STRIDE);
-		writel_relaxed(0x0, l2x0_base + L2X0_LOCKDOWN_WAY_I_BASE +
+		writel_relaxed(0x0, l2x0_base + L2X0_LOCKDOWN_WAY_I +
 			       i * L2X0_LOCKDOWN_STRIDE);
 	}
 	return 0;
