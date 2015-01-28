@@ -86,18 +86,6 @@ config USB_MUSB_HOST
 	  or "Mini-AB" connector, it supports the host role.
 	  (With a "Mini-AB" connector, you should enable USB OTG.)
 
-# use USB_GADGET_MUSB_HDRC not USB_MUSB_PERIPHERAL to #ifdef peripheral
-# side support ... OTG needs both roles
-config USB_MUSB_PERIPHERAL
-	depends on USB_GADGET
-	bool "USB Peripheral (gadget stack)"
-	select USB_GADGET_MUSB_HDRC
-	help
-	  Say Y here if your system supports the USB peripheral role.
-	  If it has a USB "B" (squarish), "Mini-B", or "Mini-AB"
-	  connector, it supports the peripheral role.
-	  (With a "Mini-AB" connector, you should enable USB OTG.)
-
 config USB_MUSB_OTG
 	depends on USB && USB_GADGET && PM && EXPERIMENTAL
 	bool "Both host and peripheral:  USB OTG (On The Go) Device"
