@@ -304,14 +304,14 @@ static int pm_clk_notify(struct notifier_block *nb,
 
 	switch (action) {
 	case BUS_NOTIFY_ADD_DEVICE:
-		if (dev->pm_domain)
+		if (dev->pwr_domain)
 			break;
 
 		error = pm_clk_init(dev);
 		if (error)
 			break;
 
-		dev->pm_domain = clknb->pm_domain;
+		dev->pwr_domain = clknb->pwr_domain;
 		if (clknb->con_ids[0]) {
 			for (con_id = clknb->con_ids; *con_id; con_id++)
 				pm_clk_add(dev, *con_id);
@@ -321,10 +321,10 @@ static int pm_clk_notify(struct notifier_block *nb,
 
 		break;
 	case BUS_NOTIFY_DEL_DEVICE:
-		if (dev->pm_domain != clknb->pm_domain)
+		if (dev->pwr_domain != clknb->pwr_domain)
 			break;
 
-		dev->pm_domain = NULL;
+		dev->pwr_domain = NULL;
 		pm_clk_destroy(dev);
 		break;
 	}
