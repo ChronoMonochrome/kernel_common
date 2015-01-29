@@ -1095,6 +1095,23 @@ CONFIG_TUN=y
 # CONFIG_VETH is not set
 CONFIG_MII=y
 CONFIG_PHYLIB=y
+CONFIG_WLAN=y
+# CONFIG_USB_ZD1201 is not set
+# CONFIG_USB_NET_RNDIS_WLAN is not set
+CONFIG_WIFI_CONTROL_FUNC=y
+# CONFIG_ATH_COMMON is not set
+# CONFIG_BCM4329 is not set
+CONFIG_BCM4330=y
+# CONFIG_BCM4334 is not set
+# CONFIG_BCM43241 is not set
+CONFIG_BCMDHD_FW_PATH="/system/etc/firmware/fw_bcmdhd.bin"
+CONFIG_BCMDHD_NVRAM_PATH="/system/etc/wifi/bcmdhd.cal"
+CONFIG_BROADCOM_WIFI_RESERVED_MEM=y
+CONFIG_WLAN_REGION_CODE=100
+# CONFIG_HOSTAP is not set
+# CONFIG_IWM is not set
+# CONFIG_LIBERTAS is not set
+# CONFIG_MWIFIEX is not set
 
 #
 # MII PHY device drivers
@@ -1115,7 +1132,7 @@ CONFIG_SMSC_PHY=y
 # CONFIG_MICREL_PHY is not set
 # CONFIG_FIXED_PHY is not set
 # CONFIG_MDIO_BITBANG is not set
-CONFIG_NET_ETHERNET=y
+CONFIG_NET_ETHERNET=n
 # CONFIG_AX88796 is not set
 # CONFIG_SMC91X is not set
 # CONFIG_DM9000 is not set
@@ -1139,7 +1156,6 @@ CONFIG_SMSC911X=y
 # CONFIG_FTMAC100 is not set
 # CONFIG_NETDEV_1000 is not set
 # CONFIG_NETDEV_10000 is not set
-# CONFIG_WLAN is not set
 
 #
 # Enable WiMAX (Networking options) to see the WiMAX drivers
