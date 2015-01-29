@@ -31,12 +31,12 @@
 #include <linux/gpio.h>
 #include <linux/earlysuspend.h>
 #include <video/ktd259x_bl.h>
+#include <linux/moduleparam.h>
 
 /* to be removed when driver works */
 //#define dev_dbg dev_info
 
-#define DEFAULT_RATIO			13
-#define DEFAULT_BRINGHESS		160
+
 #define KTD259_BACKLIGHT_OFF		0
 #define KTD259_MIN_CURRENT_RATIO	1	/* 1/32 full current */
 #define KTD259_MAX_CURRENT_RATIO	32	/* 32/32 full current */
@@ -59,6 +59,9 @@ struct ktd259 {
 	struct early_suspend	earlysuspend;
 #endif
 };
+
+static unsigned int min_brightness = 1;
+module_param(min_brightness, int, 0664);
 
 static int ktd259_set_brightness(struct backlight_device *bd)
 {
@@ -86,6 +89,21 @@ static int ktd259_set_brightness(struct backlight_device *bd)
 		reqBrightness = KTD259_BACKLIGHT_OFF;
 	} else if (reqBrightness > pd->max_brightness) {
 		reqBrightness = pd->max_brightness;
+	}
+
+	/* set minimum brightness to custom brightness */
+	if (reqBrightness != KTD259_BACKLIGHT_OFF && reqBrightness <= 10) {
+		if (unlikely(min_brightness < 1)) {
+			min_brightness = 1;
+			pr_err("[ktd259_bl] invalid input - setting bl to 1\n");
+		}
+/*
+		if (unlikely(min_brightness > 10)) {
+			min_brightness = 10;
+			pr_err("[ktd259_bl] invalid input - setting bl to 10\n");
+		}
+*/
+		reqBrightness = min_brightness;
 	}
 
 	for (newCurrentRatio = KTD259_MAX_CURRENT_RATIO; newCurrentRatio > KTD259_BACKLIGHT_OFF; newCurrentRatio--) {
@@ -159,7 +177,7 @@ static int ktd259_set_brightness(struct backlight_device *bd)
 
 exit_backlight_disabled:
 
-	pKtd259Data->brightness   = reqBrightness;
+	pKtd259Data->brightness = reqBrightness;
 
 	return 0;
 }
@@ -186,7 +204,7 @@ static void ktd259_backlight_on_off(struct backlight_device *bd, bool on)
 
 	dev_dbg(&bd->dev, "%s function enter\n", __func__);
 
-	if (on){
+	if (on) {
 		pKtd259Data->backlight_disabled = false;
 		bd->props.brightness = pKtd259Data->brightness;
 		ktd259_set_brightness(bd);
@@ -236,8 +254,8 @@ static int ktd259_probe(struct platform_device *pdev)
 
 	pKtd259Data = kmalloc(sizeof(struct ktd259), GFP_KERNEL);
 	memset(pKtd259Data, 0, sizeof(struct ktd259));
-	pKtd259Data->currentRatio = DEFAULT_RATIO;
-	pKtd259Data->brightness = DEFAULT_BRINGHESS;
+	pKtd259Data->currentRatio = KTD259_BACKLIGHT_OFF;
+	pKtd259Data->brightness = KTD259_BACKLIGHT_OFF;
 	pKtd259Data->pd = pdev->dev.platform_data;
 
 	memset(&props, 0, sizeof(struct backlight_properties));
@@ -256,7 +274,7 @@ static int ktd259_probe(struct platform_device *pdev)
 		ret = PTR_ERR(ktd259_backlight_device);
 	} else {
 		ktd259_backlight_device->props.power      = FB_BLANK_UNBLANK;
-		ktd259_backlight_device->props.brightness = DEFAULT_BRINGHESS;
+		ktd259_backlight_device->props.brightness = ktd259_backlight_device->props.max_brightness;
 		ktd259_set_brightness(ktd259_backlight_device);
 	}
 
