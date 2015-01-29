@@ -25,7 +25,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/fault-inject.h>
 #include <linux/random.h>
-#include <linux/suspend.h>
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
@@ -41,6 +40,15 @@
 #include "sd_ops.h"
 #include "sdio_ops.h"
 
+/* Hibernation and suspend events */
+#define PM_HIBERNATION_PREPARE 0x0001 /* Going to hibernate */
+#define PM_POST_HIBERNATION    0x0002 /* Hibernation finished */
+#define PM_SUSPEND_PREPARE     0x0003 /* Going to suspend the system */
+#define PM_POST_SUSPEND                0x0004 /* Suspend finished */
+#define PM_RESTORE_PREPARE     0x0005 /* Going to restore a saved image */
+#define PM_POST_RESTORE                0x0006 /* Restore failed */
+
+
 static struct workqueue_struct *workqueue;
 static const unsigned freqs[] = { 400000, 300000, 200000, 100000 };
 
@@ -50,7 +58,7 @@ static const unsigned freqs[] = { 400000, 300000, 200000, 100000 };
  * So we allow it it to be disabled.
  */
 int use_spi_crc = 1;
-module_param(use_spi_crc, bool, 0);
+module_param(use_spi_crc, bool, 0644);
 
 /*
  * We normally treat cards as removed during suspend if they are not
@@ -123,7 +131,7 @@ static inline void mmc_should_fail_request(struct mmc_host *host,
 
 #endif /* CONFIG_FAIL_MMC_REQUEST */
 
-static void dump_mmc_ios(struct mmc_host *host)
+void dump_mmc_ios(struct mmc_host *host)
 {
 	static const char const *vdd_str[] = {
 		[8]	= "2.0",
@@ -1797,6 +1805,15 @@ int mmc_erase(struct mmc_card *card, unsigned int from, unsigned int nr,
 	/* 'from' and 'to' are inclusive */
 	to -= 1;
 
+ 	/* to set the address in 16k (32sectors) */
+	if(arg == MMC_TRIM_ARG) {
+		if ((from % 32) != 0)
+			from = ((from >> 5) + 1) << 5;
+
+		to = (to >> 5) << 5;
+		if (from >= to)
+			return 0;
+	}
 	return mmc_do_erase(card, from, to, arg);
 }
 EXPORT_SYMBOL(mmc_erase);

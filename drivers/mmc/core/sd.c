@@ -309,6 +309,9 @@ static int mmc_read_switch(struct mmc_card *card)
 	if (status[13] & SD_MODE_HIGH_SPEED)
 		card->sw_caps.hs_max_dtr = HIGH_SPEED_MAX_DTR;
 
+	if (status[13] & UHS_SDR50_BUS_SPEED)
+		card->sw_caps.hs_max_dtr = 50000000;
+
 	if (card->scr.sda_spec3) {
 		card->sw_caps.sd3_bus_mode = status[13];
 
@@ -1068,9 +1071,7 @@ static int mmc_sd_alive(struct mmc_host *host)
 static void mmc_sd_detect(struct mmc_host *host)
 {
 	int err = 0;
-#ifdef CONFIG_MMC_PARANOID_SD_INIT
 	int retries = 5;
-#endif
 
 #ifdef _MMC_SAFE_ACCESS_
     int  slowcount = 100;
@@ -1114,9 +1115,7 @@ send_again:
 /*wait 1s until sd card perfectly removed*/
 		mdelay(10);
 		goto send_again;
-#ifdef CONFIG_MMC_PARANOID_SD_INIT
 		retries = 5;
-#endif
 	}
 #endif
 
