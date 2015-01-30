@@ -38,6 +38,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
 
 #include "rt2x00.h"
 #include "rt2800lib.h"
@@ -607,6 +608,15 @@ static bool rt2800_txdone_entry_check(struct queue_entry *entry, u32 reg)
 	int wcid, ack, pid;
 	int tx_wcid, tx_ack, tx_pid;
 
+	if (test_bit(ENTRY_OWNER_DEVICE_DATA, &entry->flags) ||
+	    !test_bit(ENTRY_DATA_STATUS_PENDING, &entry->flags)) {
+		WARNING(entry->queue->rt2x00dev,
+			"Data pending for entry %u in queue %u\n",
+			entry->entry_idx, entry->queue->qid);
+		cond_resched();
+		return false;
+	}
+
 	wcid	= rt2x00_get_field32(reg, TX_STA_FIFO_WCID);
 	ack	= rt2x00_get_field32(reg, TX_STA_FIFO_TX_ACK_REQUIRED);
 	pid	= rt2x00_get_field32(reg, TX_STA_FIFO_PID_TYPE);
@@ -754,12 +764,11 @@ void rt2800_txdone(struct rt2x00_dev *rt2x00dev)
 			entry = rt2x00queue_get_entry(queue, Q_INDEX_DONE);
 			if (rt2800_txdone_entry_check(entry, reg))
 				break;
+			entry = NULL;
 		}
 
-		if (!entry || rt2x00queue_empty(queue))
-			break;
-
-		rt2800_txdone_entry(entry, reg);
+		if (entry)
+			rt2800_txdone_entry(entry, reg);
 	}
 }
 EXPORT_SYMBOL_GPL(rt2800_txdone);
