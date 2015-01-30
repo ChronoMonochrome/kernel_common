@@ -1347,10 +1347,8 @@ static void handle_port_status(struct xhci_hcd *xhci,
 			xhci_ring_device(xhci, slot_id);
 			xhci_dbg(xhci, "resume SS port %d finished\n", port_id);
 			/* Clear PORT_PLC */
-			temp = xhci_readl(xhci, port_array[faked_port_index]);
-			temp = xhci_port_state_to_neutral(temp);
-			temp |= PORT_PLC;
-			xhci_writel(xhci, temp, port_array[faked_port_index]);
+			xhci_test_and_clear_bit(xhci, port_array,
+						faked_port_index, PORT_PLC);
 		} else {
 			xhci_dbg(xhci, "resume HS port %d\n", port_id);
 			bus_state->resume_done[faked_port_index] = jiffies +
@@ -1360,6 +1358,10 @@ static void handle_port_status(struct xhci_hcd *xhci,
 			/* Do the rest in GetPortStatus */
 		}
 	}
+
+	if (hcd->speed != HCD_USB3)
+		xhci_test_and_clear_bit(xhci, port_array, faked_port_index,
+					PORT_PLC);
 
 cleanup:
 	/* Update event ring dequeue pointer before dropping the lock */
@@ -1942,8 +1944,10 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 	int status = -EINPROGRESS;
 	struct urb_priv *urb_priv;
 	struct xhci_ep_ctx *ep_ctx;
+	struct list_head *tmp;
 	u32 trb_comp_code;
 	int ret = 0;
+	int td_num = 0;
 
 	slot_id = TRB_TO_SLOT_ID(le32_to_cpu(event->flags));
 	xdev = xhci->devs[slot_id];
@@ -1963,6 +1967,12 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 		xhci_err(xhci, "ERROR Transfer event for disabled endpoint "
 				"or incorrect stream ring\n");
 		return -ENODEV;
+	}
+
+	/* Count current td numbers if ep->skip is set */
+	if (ep->skip) {
+		list_for_each(tmp, &ep_ring->td_list)
+			td_num++;
 	}
 
 	event_dma = le64_to_cpu(event->buffer);
@@ -2076,7 +2086,18 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 			goto cleanup;
 		}
 
+		/* We've skipped all the TDs on the ep ring when ep->skip set */
+		if (ep->skip && td_num == 0) {
+			ep->skip = false;
+			xhci_dbg(xhci, "All tds on the ep_ring skipped. "
+						"Clear skip flag.\n");
+			ret = 0;
+			goto cleanup;
+		}
+
 		td = list_entry(ep_ring->td_list.next, struct xhci_td, td_list);
+		if (ep->skip)
+			td_num--;
 
 		/* Is this a TRB in the currently executing TD? */
 		event_seg = trb_in_td(ep_ring->deq_seg, ep_ring->dequeue,
