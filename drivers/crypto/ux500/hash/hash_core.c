@@ -23,7 +23,6 @@
 
 #include <linux/regulator/dbx500-prcmu.h>
 #include <linux/dmaengine.h>
-#include <linux/dma-mapping.h>
 #include <linux/bitops.h>
 
 #include <crypto/internal/hash.h>
