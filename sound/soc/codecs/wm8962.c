@@ -1957,7 +1957,13 @@ static int wm8962_readable_register(struct snd_soc_codec *codec, unsigned int re
 
 static int wm8962_reset(struct snd_soc_codec *codec)
 {
-	return snd_soc_write(codec, WM8962_SOFTWARE_RESET, 0x6243);
+	int ret;
+
+	ret = snd_soc_write(codec, WM8962_SOFTWARE_RESET, 0x6243);
+	if (ret != 0)
+		return ret;
+
+	return snd_soc_write(codec, WM8962_PLL_SOFTWARE_RESET, 0);
 }
 
 static const DECLARE_TLV_DB_SCALE(inpga_tlv, -2325, 75, 0);
@@ -3822,6 +3828,11 @@ static int wm8962_probe(struct snd_soc_codec *codec)
 	 * write to registers if the device is declocked.
 	 */
 	snd_soc_update_bits(codec, WM8962_CLOCKING2, WM8962_SYSCLK_ENA, 0);
+
+	/* Ensure that the oscillator and PLLs are disabled */
+	snd_soc_update_bits(codec, WM8962_PLL2,
+			    WM8962_OSC_ENA | WM8962_PLL2_ENA | WM8962_PLL3_ENA,
+			    0);
 
 	regulator_bulk_disable(ARRAY_SIZE(wm8962->supplies), wm8962->supplies);
 
