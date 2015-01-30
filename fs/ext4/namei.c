@@ -1046,9 +1046,10 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, stru
 		inode = ext4_iget(dir->i_sb, ino);
 		if (IS_ERR(inode)) {
 			if (PTR_ERR(inode) == -ESTALE) {
+	                        /* In case of -ESTALE, printing debugging data is already done in ext4_iget */
 				EXT4_ERROR_INODE(dir,
-						 "deleted inode referenced: %u",
-						 ino);
+					         "deleted inode referenced: %u at parent inode : %lu",
+						 ino, dir->i_ino);
 				return ERR_PTR(-EIO);
 			} else {
 				return ERR_CAST(inode);
