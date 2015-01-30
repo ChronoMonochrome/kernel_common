@@ -827,7 +827,7 @@ static int cmld_channel_open(struct file *file)
 
 	/* Initialize wait_queue, lists and mutexes */
 	init_waitqueue_head(&channelPriv->waitq);
-	plist_head_init(&channelPriv->messageQueue, NULL);
+	plist_head_init(&channelPriv->messageQueue);
 	INIT_LIST_HEAD(&channelPriv->skelList);
 	spin_lock_init(&channelPriv->bh_lock);
 	mutex_init(&channelPriv->msgQueueLock);
