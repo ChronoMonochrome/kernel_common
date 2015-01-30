@@ -282,7 +282,7 @@ int pm_runtime_clk_resume(struct device *dev)
  * pm_domain field and its con_ids member is used to populate the device's list
  * of runtime PM clocks, depending on @action.
  *
- * If the device's pm_domain field is already populated with a value different
+ * If the device's pwr_domain field is already populated with a value different
  * from the one stored in the struct pm_clk_notifier_block object, the function
  * does nothing.
  */
