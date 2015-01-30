@@ -13,9 +13,6 @@ config CLKBLD_I8253
 config CLKSRC_MMIO
 	bool
 
-config DW_APB_TIMER
-	bool
-
 config CLKSRC_DBX500_PRCMU
 	bool "Clocksource PRCMU Timer"
 	depends on UX500_SOC_DB5500 || UX500_SOC_DB8500
