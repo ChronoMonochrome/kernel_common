@@ -35,11 +35,6 @@
 #include <linux/rtc.h>
 /* firmware - update */
 
-#define TOUCH_BOOSTER
-#if defined(TOUCH_BOOSTER)
-#include <linux/mfd/dbx500-prcmu.h>
-#endif
-
 #define MAX_X	480 
 #define MAX_Y	800
 #define TSP_INT 218//86
@@ -223,7 +218,7 @@ unsigned char touch_fw_ver = 0;
 
 #define TSP_VENDER_ID	0xF0
 
-#define TSP_KERNEL_FW_ID		0x0E    //Firmware version in Kernel binary
+#define TSP_KERNEL_FW_ID		0x07    //Firmware version in Kernel binary
 
 int tsp_irq_num = 0;
 int tsp_workqueue_num = 0;
@@ -416,7 +411,7 @@ void touch_ctrl_regulator(int on_off)
 {
 
 	if(!touch_regulator) {
-		//printk(KERN_ERR "tma140: 3.3v tsp regulator is NULL\n");
+		printk(KERN_ERR "tma140: 3.3v tsp regulator is NULL\n");
 		
 		touch_regulator = regulator_get(NULL, "v-tsp-3.3");
 		if (IS_ERR(touch_regulator)) {
@@ -638,20 +633,17 @@ void tsp_log(report_finger_info_t *fingerinfo, int i)
 
 }
 
-#define ADDR_OFFSEET	0x02
+
 static irqreturn_t ts_work_func(int irq, void *dev_id)
 {
 	int ret=0;
-	uint8_t buf[31];// 00h ~ 1Eh		// KEVI added m
-	uint8_t i2c_addr = 0x00;
+	uint8_t buf[29];// 02h ~ 1Fh
+	uint8_t i2c_addr = 0x02;
 	int i = 0;
 	int pressed_num;
 #ifdef __TOUCHKEY__	
 	uint8_t buf_key[1];	
 	int button_check = 0;
-#endif
-#if 1 // YKJ_20130103_ID_fix
-    bool bShifted_Buffer = false;
 #endif
 
 	if(tsp_testmode || tsp_releasing)
@@ -669,22 +661,12 @@ static irqreturn_t ts_work_func(int irq, void *dev_id)
 		goto work_func_out;
 	}
 
-	/*
-	 * KEVI added + : skip ISR when invalid bit set(address=0x01, size=0x01, 6th bit)
-	 * thread function can be delayed due to another ISR. 
-	 * So INVALID bit should be checked in ISR
-	 */ 
-	if (buf[1] & 0x20)
-	{
-		printk("[TSP] invalid bit set : ln=%d",__LINE__);
-		goto work_func_out;
-	}
 
-	//Lower 4bits of register01 is the pressed finger number
-	pressed_num= 0x0f&buf[0 + ADDR_OFFSEET];
+	//01 번지 하위 4비트는 눌린 finger 갯수
+	pressed_num= 0x0f&buf[0];
 #ifdef __TOUCHKEY__
-	buf_key[0] = buf[25 + ADDR_OFFSEET] & 0x03; //information of touch key
-	button_check = buf[0 + ADDR_OFFSEET] & 0x40;
+	buf_key[0] = buf[25] & 0x03; //information of touch key
+	button_check = buf[0] & 0x40;
 
 	if(button_check != 0)
 	{
@@ -696,23 +678,22 @@ static irqreturn_t ts_work_func(int irq, void *dev_id)
 #endif		
 	{
 
-		fingerInfo[0].x = (buf[1 + ADDR_OFFSEET] << 8) |buf[2 + ADDR_OFFSEET];
-		fingerInfo[0].y = (buf[3 + ADDR_OFFSEET] << 8) |buf[4 + ADDR_OFFSEET];
-		fingerInfo[0].z = buf[5 + ADDR_OFFSEET];
-		fingerInfo[0].id = buf[6 + ADDR_OFFSEET] >>4;
+		fingerInfo[0].x = (buf[1] << 8) |buf[2];
+		fingerInfo[0].y = (buf[3] << 8) |buf[4];
+		fingerInfo[0].z = buf[5];
+		fingerInfo[0].id = buf[6] >>4;
 
-		fingerInfo[1].x = (buf[7 + ADDR_OFFSEET] << 8) |buf[8 + ADDR_OFFSEET];
-		fingerInfo[1].y = (buf[9 + ADDR_OFFSEET] << 8) |buf[10 + ADDR_OFFSEET];
-		fingerInfo[1].z = buf[11 + ADDR_OFFSEET];
-		fingerInfo[1].id = buf[6 + ADDR_OFFSEET] & 0xf;
+		fingerInfo[1].x = (buf[7] << 8) |buf[8];
+		fingerInfo[1].y = (buf[9] << 8) |buf[10];
+		fingerInfo[1].z = buf[11];
+		fingerInfo[1].id = buf[6] & 0xf;
 
 #if defined(__TOUCH_DEBUG__)
 		printk("[TSP] pressed finger num [%d]\n", pressed_num);			 		
 #endif
 
-#if 0 // block ; YKJ_20130104_1
 #if defined (__SEND_VIRTUAL_RELEASED__)
-		if((fingerInfo[2].id != fingerInfo[0].id) && (prev_pressed_num >=1 && pressed_num==1))
+		if((fingerInfo[2].id != fingerInfo[0].id) && (prev_pressed_num ==1 && pressed_num==1))
 		{
 
 			input_mt_slot(ts->input_dev, 0);
@@ -726,39 +707,6 @@ static irqreturn_t ts_work_func(int irq, void *dev_id)
 			input_sync(ts->input_dev);
 		}
 #endif
-#else // modify ; YKJ_20130104_1
-#if defined (__SEND_VIRTUAL_RELEASED__)
-        if(pressed_num == 1) // current 1-finger
-        {
-            if(prev_pressed_num == 1) // previous 1-finger
-            {
-                // case ; finger-ID has been changed by delta position over xy_distance_thres.
-                if(fingerInfo[0].id != fingerInfo[2].id)
-                {
-                    input_mt_slot(ts->input_dev, fingerInfo[2].id-1);
-                    input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0); // force release
-                    #if defined(__TOUCH_DEBUG__)
-        			printk("[TSP] send virtual release  xy[%d, %d]\n", fingerInfo[2].x, fingerInfo[2].y);
-                    #endif
-         			tsp_log(fingerInfo, 2);
-        			input_sync(ts->input_dev);
-                }
-            }
-            else if(prev_pressed_num > 1) // previous 2-finger
-            {
-                // case ; 2nd fingerInfo has been shifted to first buf at the time of 2-finger to 1-finger change by reverse order of touch events.
-                if((fingerInfo[0].id >= 1)&&(fingerInfo[0].id != fingerInfo[2].id)&&(fingerInfo[1].id == 0))
-                {
-                    bShifted_Buffer = true;
-                }
-            }
-        }
-        else
-        {
-            bShifted_Buffer = false;
-        }
-#endif
-#endif
 
 		/* check touch event */
 		for ( i= 0; i<MAX_USING_FINGER_NUM; i++ )
@@ -766,18 +714,6 @@ static irqreturn_t ts_work_func(int irq, void *dev_id)
 		{
 			if(fingerInfo[i].id >=1) // press interrupt
 			{
-#if defined(TOUCH_BOOSTER)
-			if(pressed_num >= 1 && prev_pressed_num ==0 ) {
-				prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
-					(char *)ts_global->client->name,
-					PRCMU_QOS_APE_OPP_MAX);
-				prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
-					(char *)ts_global->client->name,
-					PRCMU_QOS_DDR_OPP_MAX);
-				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
-					(char *)ts_global->client->name, 800000);
-            }
-#endif
 				fingerInfo[i].status = 1;
 
 
@@ -787,9 +723,7 @@ static irqreturn_t ts_work_func(int irq, void *dev_id)
 					fingerInfo[i].z == fingerInfo[i+2].z )
 					continue;
 
-				//input_mt_slot(ts->input_dev, i);
-				input_mt_slot(ts->input_dev, (fingerInfo[i].id-1));  // modify ; YKJ_20130104_1
-
+				input_mt_slot(ts->input_dev, i);
 				input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 1);
 
 				input_report_abs(ts->input_dev, ABS_MT_POSITION_X, fingerInfo[i].x);
@@ -804,32 +738,11 @@ static irqreturn_t ts_work_func(int irq, void *dev_id)
 				{
 					fingerInfo[i].status = 0;
 
-					//input_mt_slot(ts->input_dev, i);
-					if(bShifted_Buffer == true) // modify ; YKJ_20130104_1
-					{
-						input_mt_slot(ts->input_dev, (fingerInfo[2].id - 1));
-					}
-					else
-					{
-						input_mt_slot(ts->input_dev, (fingerInfo[i+2].id - 1));
-					}
+					input_mt_slot(ts->input_dev, i);
 					input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
 
 				tsp_log(fingerInfo, i);
 				}
-#if defined(TOUCH_BOOSTER)
-            	if (pressed_num == 0) {
-            		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
-            			(char *)ts_global->client->name,
-            			PRCMU_QOS_DEFAULT_VALUE);
-            		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
-            			(char *)ts_global->client->name,
-            			PRCMU_QOS_DEFAULT_VALUE);
-            		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
-            			(char *)ts_global->client->name,
-            			PRCMU_QOS_DEFAULT_VALUE);
-            	}
-#endif
 			}
 
 		}
@@ -882,8 +795,7 @@ event_check_out:
 
 	prev_pressed_num=pressed_num;
 
-    bShifted_Buffer = false; // add ; YKJ_20130104_1
-#endif
+#endif	
 
 
 
@@ -2434,7 +2346,6 @@ static int ts_probe(
 #ifdef __TSP_FORCE_UPDATE__ //auto update enable
 			if(touch_fw_ver < TSP_KERNEL_FW_ID)
 			{
-				now_tspfw_update = 1;
 				if(firm_update_callfc() <= 0)
 				{
 					printk("[TSP] %s, ln:%d, FW update fail!!",__func__,__LINE__);
@@ -2455,7 +2366,6 @@ static int ts_probe(
 						tma_kmsg("version read FAIL!!");
 					}		
 				}				
-				now_tspfw_update = 0;	
 			}
 #endif
 
@@ -2519,15 +2429,6 @@ static int ts_probe(
 		goto err_input_register_device_failed;
 	}
 
-#if defined(TOUCH_BOOSTER)
-	prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
-	prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
-	prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
-	dev_info(&client->dev, "add_prcmu_qos is added\n");
-#endif
 	printk("[TSP] %s, irq=%d\n", __func__, client->irq );
 
 	if (client->irq) {
@@ -2540,10 +2441,7 @@ static int ts_probe(
 		if (ret == 0)
 			ts->use_irq = 1;
 		else
-           {      
 			dev_err(&client->dev, "request_irq failed\n");
-                 goto err_request_irq;
-           }
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -2621,12 +2519,6 @@ static int ts_probe(
 
 	return 0;
 
-err_request_irq:
-#if defined(TOUCH_BOOSTER)
-	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, (char *)client->name);
-	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, (char *)client->name);
-	prcmu_qos_remove_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name);
-#endif    
 err_input_register_device_failed:
 	input_free_device(ts->input_dev);
 
@@ -2875,7 +2767,8 @@ static ssize_t firmware_In_Binary(struct device *dev, struct device_attribute *a
 
      if(touch_fw_ver != TSP_KERNEL_FW_ID)
      {
-        return sprintf(buf, "%d\n",  TSP_KERNEL_FW_ID);
+        phone_ver = touch_fw_ver;
+        return sprintf(buf, "%d\n",  touch_fw_ver);
      }
      
 	return sprintf(buf, "%c%c%.2d%.4d", touch_vendor_id1, touch_vendor_id2, touch_hw_id, touch_fw_ver);

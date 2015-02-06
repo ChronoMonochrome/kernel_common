@@ -16,8 +16,6 @@
 
 /* #define DEBUG */
 /* #define VERBOSE_DEBUG */
-#define TOUCH_BOOSTER
-
 #define TSP_FACTORY
 #define TSK_FACTORY
 #define MMS_SUPPORT_G1M
@@ -33,11 +31,6 @@
 #include <linux/input/mt.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
-
-#if defined(TOUCH_BOOSTER)
-#include <linux/mfd/dbx500-prcmu.h>
-#endif
-
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -46,11 +39,6 @@
 #include <linux/uaccess.h>
 #ifdef TSP_FACTORY
 #include <linux/list.h>
-#endif
-
-#ifdef CONFIG_USB_SWITCHER
-#include <linux/usb_switcher.h>
-#include <linux/input/ab8505_micro_usb_iddet.h>
 #endif
 
 #define MAX_WIDTH		30
@@ -63,7 +51,7 @@
 #define MMS_YRES_LO		0x04
 #define MMS_THRESHOLD		0x05
 #define MMS_TK_INTENSITY	0x07
-#define MMS_TK_THRESHOLD	0x6B
+#define MMS_TK_THRESHOLD	0x0A
 
 #define MMS_INPUT_EVENT_PKT_SZ	0x0F
 #define MMS_INPUT_EVENT0	0x10
@@ -169,44 +157,6 @@ enum {
 	TOUCH_KEY
 };
 
-#ifdef CONFIG_USB_SWITCHER
-enum {
-	NORMAL_MODE = 0,
-	TA_MODE,
-};
-
-enum ab8505_usb_link_status {
-	USB_LINK_NOT_CONFIGURED_8505 = 0,
-	USB_LINK_STD_HOST_NC_8505,
-	USB_LINK_STD_HOST_C_NS_8505,
-	USB_LINK_STD_HOST_C_S_8505,
-	USB_LINK_CDP_8505,
-	USB_LINK_RESERVED0_8505,
-	USB_LINK_RESERVED1_8505,
-	USB_LINK_DEDICATED_CHG_8505,
-	USB_LINK_ACA_RID_A_8505,
-	USB_LINK_ACA_RID_B_8505,
-	USB_LINK_ACA_RID_C_NM_8505,
-	USB_LINK_RESERVED2_8505,
-	USB_LINK_RESERVED3_8505,
-	USB_LINK_HM_IDGND_8505,
-	USB_LINK_CHARGERPORT_NOT_OK_8505,
-	USB_LINK_CHARGER_DM_HIGH_8505,
-	USB_LINK_PHYEN_NO_VBUS_NO_IDGND_8505,
-	USB_LINK_STD_UPSTREAM_NO_IDGNG_NO_VBUS_8505,
-	USB_LINK_STD_UPSTREAM_8505,
-	USB_LINK_CHARGER_SE1_8505,
-	USB_LINK_CARKIT_CHGR_1_8505,
-	USB_LINK_CARKIT_CHGR_2_8505,
-	USB_LINK_ACA_DOCK_CHGR_8505,
-	USB_LINK_SAMSUNG_BOOT_CBL_PHY_EN_8505,
-	USB_LINK_SAMSUNG_BOOT_CBL_PHY_DISB_8505,
-	USB_LINK_SAMSUNG_UART_CBL_PHY_EN_8505,
-	USB_LINK_SAMSUNG_UART_CBL_PHY_DISB_8505,
-	USB_LINK_MOTOROLA_FACTORY_CBL_PHY_EN_8505,
-};
-#endif
-
 #define MMS_FW_HEADER_VER	0x01
 
 struct mms_fw_image {
@@ -240,19 +190,10 @@ struct mms_ts_info {
 	bool				enabled;
 	bool				*finger_state;
 	u8				*finger_ev_buf;
-#if defined(TOUCH_BOOSTER)
-	u8				finger_cnt;
-#endif
 
 #ifdef TSK_FACTORY
 	struct device			*dev_tk;
 	bool				*key_pressed;
-#endif
-
-#ifdef CONFIG_USB_SWITCHER
-	struct notifier_block		nb;
-	u8				dev_mode;
-	bool				ts_noise;
 #endif
 
 #ifdef TSP_FACTORY
@@ -345,11 +286,6 @@ static void mms_ts_early_suspend(struct early_suspend *h);
 static void mms_ts_late_resume(struct early_suspend *h);
 #endif
 
-#ifdef CONFIG_USB_SWITCHER
-extern int micro_usb_register_usb_notifier(struct notifier_block *nb);
-extern int use_ab8505_iddet;
-#endif
-
 static void hw_reboot(struct mms_ts_info *info, bool bootloader)
 {
 	if (info->pdata->vdd_on)
@@ -438,26 +374,6 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 		goto out;
 	}
 
-#ifdef CONFIG_USB_SWITCHER
-	if (buf[0] == 0x0E) {
-		dev_info(&client->dev, "enter the noise mode\n");
-		buf[0] = 0x0;
-		info->ts_noise = 1;
-		i2c_smbus_write_byte_data(info->client, 0x10, 0x00);
-
-		if (info->dev_mode) {
-			dev_info(&info->client->dev, "TA MODE\n");
-			i2c_smbus_write_byte_data(info->client, 0x30, 0x1);
-		} else {
-			dev_info(&info->client->dev, "NORMAL MODE\n");
-			i2c_smbus_write_byte_data(info->client, 0x30, 0x2);
-			info->ts_noise = 0;
-		}
-
-		goto out;
-	}
-#endif
-
 #if defined(VERBOSE_DEBUG)
 	print_hex_dump(KERN_DEBUG, "mms_ts raw: ",
 		       DUMP_PREFIX_OFFSET, 32, 1, buf, sz, false);
@@ -492,48 +408,11 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 				input_mt_report_slot_state(info->input_dev_ts,
 						   MT_TOOL_FINGER, false);
 				info->finger_state[id] = 0;
-#if defined(TOUCH_BOOSTER)
-				if (info->finger_cnt > 0)
-					info->finger_cnt--;
-
-				if (info->finger_cnt == 0) {
-					prcmu_qos_update_requirement(
-						PRCMU_QOS_APE_OPP,
-						(char *)info->client->name,
-						PRCMU_QOS_DEFAULT_VALUE);
-					prcmu_qos_update_requirement(
-						PRCMU_QOS_DDR_OPP,
-						(char *)info->client->name,
-						PRCMU_QOS_DEFAULT_VALUE);
-					prcmu_qos_update_requirement(
-						PRCMU_QOS_ARM_KHZ,
-						(char *)info->client->name,
-						PRCMU_QOS_DEFAULT_VALUE);
-				}
-#endif
 
 				continue;
 			}
 
 			if (info->finger_state[id] == 0) {
-#if defined(TOUCH_BOOSTER)
-				if (info->finger_cnt == 0) {
-					prcmu_qos_update_requirement(
-						PRCMU_QOS_APE_OPP,
-						(char *)info->client->name,
-						PRCMU_QOS_APE_OPP_MAX);
-					prcmu_qos_update_requirement(
-						PRCMU_QOS_DDR_OPP,
-						(char *)info->client->name,
-						PRCMU_QOS_DDR_OPP_MAX);
-					prcmu_qos_update_requirement(
-						PRCMU_QOS_ARM_KHZ,
-						(char *)info->client->name,
-						800000);
-				}
-
-				info->finger_cnt++;
-#endif
 				info->finger_state[id] = 1;
 				dev_info(&client->dev,
 					"%4s[%d]: %3d, %3d (%3d,%3d)\n",
@@ -603,62 +482,6 @@ static inline void mms_pwr_on_reset(struct mms_ts_info *info)
 	 * Find the right value */
 	msleep(250);
 }
-
-#ifdef CONFIG_USB_SWITCHER
-int mms_usb_switch_notify(struct notifer_block *nb, unsigned long val,
-			  void *dev)
-{
-	struct mms_ts_info *info = container_of(nb, struct mms_ts_info, nb);
-	struct i2c_client *client = info->client;
-
-	if (use_ab8505_iddet) {
-		if ((val & 0x1F) == USB_LINK_NOT_CONFIGURED_8505) {
-			dev_info(&client->dev, "%s: Normal mode(0x%x)\n",
-				 __func__, val);
-			info->dev_mode = NORMAL_MODE;
-
-		} else {
-			switch (val & 0x1F) {
-			case USB_LINK_STD_HOST_NC_8505:
-			case USB_LINK_STD_HOST_C_NS_8505:
-			case USB_LINK_STD_HOST_C_S_8505:
-			case USB_LINK_CDP_8505:
-			case USB_LINK_DEDICATED_CHG_8505:
-			case USB_LINK_CARKIT_CHGR_1_8505:
-			case USB_LINK_CARKIT_CHGR_2_8505:
-				dev_info(&client->dev, "%s: TA mode(0x%x)\n",
-					 __func__, val);
-				info->dev_mode = TA_MODE;
-				break;
-			default:
-				dev_err(&client->dev, "%s: no mode (0x%x)\n",
-					__func__, val);
-			}
-		}
-	} else {
-		if ((val & (EXTERNAL_USB | EXTERNAL_DEDICATED_CHARGER |
-		    EXTERNAL_USB_CHARGER | EXTERNAL_CAR_KIT |
-		    EXTERNAL_PHONE_POWERED_DEVICE)) && (val &
-		    (USB_SWITCH_CONNECTION_EVENT |
-		    USB_SWITCH_DRIVER_STARTED))) {
-			dev_info(&client->dev, "%s: TA mode(0x%x)\n",
-					 __func__, val);
-			info->dev_mode = TA_MODE;
-
-		} else if (val & USB_SWITCH_DISCONNECTION_EVENT) {
-			dev_info(&client->dev, "%s: Normal mode(0x%x)\n",
-				 __func__, val);
-			info->dev_mode = NORMAL_MODE;
-
-		} else {
-			dev_err(&client->dev, "%s: no mode (0x%x)\n",
-					__func__, val);
-		}
-	}
-
-	return 0;
-}
-#endif
 
 static void isp_toggle_clk(struct mms_ts_info *info, int start_lvl, int end_lvl,
 			   int hold_us)
@@ -1099,40 +922,45 @@ static int mms_ts_fw_load_built_in(struct mms_ts_info *info)
 	struct i2c_client *client = info->client;
 	const struct firmware *_fw;
 	struct mms_fw_image *_fw_img;
-	char *fw_name;
-	u8 hw_id;
 	int ret = 0;
+#ifdef MMS_SUPPORT_G1M
+	char *buff;
+	char *replase;
+	char *fw_name;
+#endif
 
-	if (!info->pdata->fw_name_builtin_0a)
-		goto err_no_path;
-
-	if (!info->pdata->fw_name_builtin_0f)
-		goto err_no_path;
-
-	if (!info->pdata->fw_name_builtin_47)
+	if (!info->pdata->fw_name_builtin)
 		goto err_no_path;
 
 #ifdef MMS_SUPPORT_G1M
-	if (panel_type && panel_type != 'F')
-		fw_name = info->pdata->fw_name_builtin_0a;
-	else {
-#endif
-		ret = i2c_smbus_read_i2c_block_data(client, MMS_HW_ID, 1, &hw_id);
-		if (ret < 0) {
-			dev_err(&client->dev, "fail to read HW ID (%d)\n", ret);
-			goto err_request_fw;
+	fw_name = info->pdata->fw_name_builtin;
+
+	if (panel_type && panel_type != 'F') {
+		buff = kzalloc(strlen(fw_name) + 1, GFP_KERNEL);
+		if (!buff) {
+			dev_err(&client->dev, "Failed to allocate memory\n");
+			ret = -ENOMEM;
+
+			goto err_alloc;
 		}
 
-		if (hw_id == 0x0F)
-			fw_name = info->pdata->fw_name_builtin_0f;
-		else
-			fw_name = info->pdata->fw_name_builtin_47;
-#ifdef MMS_SUPPORT_G1M
+		strcpy(buff, fw_name);
+
+		replase = strstr(buff, "0F");
+		*(replase + 1) = 'A';
+		fw_name = buff;
 	}
-#endif
+
 	dev_info(&client->dev, "load firmware %s\n", fw_name);
 
 	ret = request_firmware(&_fw, fw_name, &client->dev);
+#else
+	dev_info(&client->dev,
+		"load firmware %s\n", info->pdata->fw_name_builtin);
+
+	ret = request_firmware(&_fw, info->pdata->fw_name_builtin,
+								&client->dev);
+#endif
 	if (ret) {
 		dev_err(&client->dev,
 				"error requesting built-in fw (%d)\n", ret);
@@ -1146,7 +974,7 @@ static int mms_ts_fw_load_built_in(struct mms_ts_info *info)
 		_fw_img->hdr_ver != MMS_FW_HEADER_VER) {
 		dev_err(&client->dev,
 			"fw image '%s' invalid, may continue\n",
-			fw_name);
+			info->pdata->fw_name_builtin);
 		ret = -2;
 		goto err_fw_size;
 	}
@@ -1156,11 +984,20 @@ static int mms_ts_fw_load_built_in(struct mms_ts_info *info)
 	info->fw = _fw;
 	info->fw_img = _fw_img;
 
+#ifdef MMS_SUPPORT_G1M
+	if (panel_type && panel_type != 'F')
+		kfree(buff);
+#endif
 	return 0;
 
 err_fw_size:
 	release_firmware(_fw);
 err_request_fw:
+#ifdef MMS_SUPPORT_G1M
+	if (panel_type && panel_type != 'F')
+		kfree(buff);
+err_alloc:
+#endif
 err_no_path:
 	return ret;
 }
@@ -1183,44 +1020,45 @@ static int mms_ts_fw_load_ums(struct mms_ts_info *info)
 	struct file *fp;
 	long fsize, nread;
 	u8 *buff;
-	u8 *fw_name;
-	u8 hw_id;
-	int ret = 0;
+	int ret;
+#ifdef MMS_SUPPORT_G1M
+	char *temp;
+	char *replase;
+	char *fw_name;
+#endif
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 
-	if (!info->pdata->fw_name_ums_0a)
-		goto err_no_path;
-
-	if (!info->pdata->fw_name_ums_0f)
-		goto err_no_path;
-
-	if (!info->pdata->fw_name_ums_47)
+	if (!info->pdata->fw_name_ums)
 		goto err_no_path;
 
 #ifdef MMS_SUPPORT_G1M
-	if (panel_type && panel_type != 'F')
-		fw_name = info->pdata->fw_name_ums_0a;
-	else {
-#endif
-		ret = i2c_smbus_read_i2c_block_data(client, MMS_HW_ID, 1, &hw_id);
-		if (ret < 0) {
-			dev_err(&client->dev, "fail to read HW ID (%d)\n", ret);
-			goto err_open;
+	fw_name = info->pdata->fw_name_ums;
+
+	if (panel_type && panel_type != 'F') {
+		temp = kzalloc(strlen(fw_name) + 1, GFP_KERNEL);
+		if (!temp) {
+			dev_err(&client->dev, "Failed to allocate memory\n");
+			ret = -ENOMEM;
+
+			goto err_no_path;
 		}
 
-		if (hw_id == 0x0F)
-			fw_name = info->pdata->fw_name_ums_0f;
-		else
-			fw_name = info->pdata->fw_name_ums_47;
-#ifdef MMS_SUPPORT_G1M
+		strcpy(temp, fw_name);
+
+		replase = strstr(temp, "0F");
+		*(replase + 1) = 'A';
+		fw_name = temp;
 	}
-#endif
+
 	fp = filp_open(fw_name, O_RDONLY, S_IRUSR);
+#else
+	fp = filp_open(info->pdata->fw_name_ums, O_RDONLY, S_IRUSR);
+#endif
 	if (IS_ERR_OR_NULL(fp)) {
 		dev_err(&client->dev, "fail to open fw in ums (%s)\n",
-				fw_name);
+				info->pdata->fw_name_ums);
 		ret = -1;
 		goto err_open;
 	}
@@ -1241,12 +1079,16 @@ static int mms_ts_fw_load_ums(struct mms_ts_info *info)
 		_fw_img->hdr_ver != MMS_FW_HEADER_VER) {
 		dev_err(&client->dev,
 			"fw image '%s' invalid, may continue\n",
-			fw_name);
+			info->pdata->fw_name_ums);
 		goto err_fw_size;
 	}
 
 	info->fw_img = _fw_img;
 
+#ifdef MMS_SUPPORT_G1M
+	if (panel_type && panel_type != 'F')
+		kfree(temp);
+#endif
 
 	filp_close(fp, NULL);
 	set_fs(old_fs);
@@ -1257,6 +1099,10 @@ err_fw_size:
 err_alloc:
 	filp_close(fp, NULL);
 err_open:
+#ifdef MMS_SUPPORT_G1M
+	if (panel_type && panel_type != 'F')
+		kfree(temp);
+#endif
 err_no_path:
 	set_fs(old_fs);
 	return ret;
@@ -1309,25 +1155,11 @@ static int mms_ts_fw_flash_isc(struct mms_ts_info *info)
 	return ret;
 }
 
-static bool need_update(u8 ic_ver, struct mms_ts_info *info)
+static bool need_update(u8 core_ic, u8 core_bin)
 {
 	bool ret = false;
-	int rev;
-	u8 hw_id;
 
-	rev = i2c_smbus_read_i2c_block_data(info->client, MMS_HW_ID, 1, &hw_id);
-	if (rev < 0) {
-		dev_err(&info->client->dev, "fail to read HW ID (%d)\n", ret);
-		return ret;
-	}
-
-	if (hw_id != info->fw_img->hw_id) {
-		dev_info(&info->client->dev, "HW ID is different!! IC(0x%x) != SW(0x%x)\n",
-			 hw_id, info->fw_img->hw_id);
-		return ret;
-	}
-
-	if (ic_ver != info->fw_img->fw_ver)
+	if (core_ic != core_bin)
 		ret = true;
 
 	return ret;
@@ -1417,7 +1249,7 @@ fw_load:
 	dev_info(&client->dev,
 			"loaded fw: ver(0x%X)\n", info->fw_img->fw_ver);
 
-	ret = (int)need_update(fw_ver, info);
+	ret = (int)need_update(fw_ver, info->fw_img->fw_ver);
 
 	if (!ret && !force)
 		goto do_not_need_update;
@@ -2065,14 +1897,32 @@ static void get_fw_ver_bin(void *device_data)
 	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
 	struct i2c_client *client = info->client;
 	char buff[TSP_CMD_FULL_VER_LEN] = {0,};
+	u8 temp;
 	int ret;
 
 	set_default_result(info);
 
-	snprintf(buff, 3, "%s", info->fw_img->vendor_id);
-	sprintf(buff + 2, "%02X", info->fw_img->hw_id);
-	sprintf(buff + 4, "%04X", info->fw_img->fw_ver);
+	ret = i2c_smbus_read_i2c_block_data(client, MMS_VENDOR_ID, 2, buff);
+	if (ret < 0) {
+		dev_err(&client->dev, "fail to read vendor ID (%d)\n", ret);
+		goto out;
+	}
 
+	ret = i2c_smbus_read_i2c_block_data(client, MMS_HW_ID, 1, &temp);
+	if (ret < 0) {
+		dev_err(&client->dev, "fail to read HW ID (%d)\n", ret);
+		goto out;
+	}
+
+	sprintf(buff + 2, "%02X", temp);
+
+	ret = i2c_smbus_read_i2c_block_data(client, MMS_FW_VER, 1, &temp);
+	if (ret < 0) {
+		dev_err(&client->dev, "fail to read FW ver (%d)\n", ret);
+		goto out;
+	}
+
+	sprintf(buff + 4, "%04X", temp);
 	sprintf(info->cmd_buff, "%s", buff);
 	set_cmd_result(info, info->cmd_buff, strlen(info->cmd_buff));
 	info->cmd_state = OK;
@@ -2080,6 +1930,12 @@ static void get_fw_ver_bin(void *device_data)
 	dev_info(&client->dev, "%s: \"%s\"(%d)\n", __func__,
 				info->cmd_buff, strlen(info->cmd_buff));
 
+	return;
+
+out:
+	sprintf(info->cmd_buff, "%s", "NG");
+	set_cmd_result(info, info->cmd_buff, strlen(info->cmd_buff));
+	info->cmd_state = FAIL;
 	return;
 }
 
@@ -3192,16 +3048,6 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		goto err_init_device;
 	}
 
-#if defined(TOUCH_BOOSTER)
-	prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
-	prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
-	prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
-	dev_info(&client->dev, "add_prcmu_qos is added\n");
-#endif
-
 	ret = request_threaded_irq(client->irq, NULL, mms_ts_interrupt,
 				   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 				   "mms_ts", info);
@@ -3212,15 +3058,6 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 
 	info->irq = client->irq;
 	info->enabled = true;
-
-#ifdef CONFIG_USB_SWITCHER
-	info->nb.notifier_call = mms_usb_switch_notify;
-
-	if (use_ab8505_iddet)
-		micro_usb_register_usb_notifier(&info->nb);
-	else
-		usb_switch_register_notify(&info->nb);
-#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	info->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
@@ -3249,11 +3086,6 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 err_factory_init:
 	free_irq(info->irq, info);
 err_req_irq:
-#if defined(TOUCH_BOOSTER)
-	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, (char *)client->name);
-	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, (char *)client->name);
-	prcmu_qos_remove_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name);
-#endif
 err_init_device:
 	if (info->pdata->key_nums)
 		input_unregister_device(input_dev_tk);
@@ -3294,8 +3126,7 @@ static int mms_ts_enable(struct mms_ts_info *info)
 
 	info->pdata->pin_set_pull(true);
 
-	if (info->pdata->vdd_on)
-		info->pdata->vdd_on(&info->client->dev, 1);
+	mms_pwr_on_reset(info);
 
 	info->enabled = true;
 	enable_irq(info->irq);
@@ -3333,12 +3164,6 @@ static int __devexit mms_ts_remove(struct i2c_client *client)
 
 	if (info->irq >= 0)
 		free_irq(info->irq, info);
-
-#if defined(TOUCH_BOOSTER)
-	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, (char *)client->name);
-	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, (char *)client->name);
-	prcmu_qos_remove_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name);
-#endif
 
 	input_mt_destroy_slots(info->input_dev_ts);
 	input_unregister_device(info->input_dev_ts);
@@ -3414,35 +3239,6 @@ static int mms_ts_resume(struct device *dev)
 	mutex_lock(&info->input_dev_ts->mutex);
 	if (info->input_dev_ts->users)
 		ret = mms_ts_enable(info);
-
-#ifdef CONFIG_USB_SWITCHER
-	if (info->ts_noise) {
-		if (info->dev_mode) {
-			dev_info(&info->client->dev, "TA MODE\n");
-			i2c_smbus_write_byte_data(info->client, 0x30, 0x1);
-		} else {
-			dev_info(&info->client->dev, "NORMAL MODE\n");
-			i2c_smbus_write_byte_data(info->client, 0x30, 0x2);
-			info->ts_noise = 0;
-		}
-	}
-#endif
-
-#if defined(TOUCH_BOOSTER)
-	info->finger_cnt == 0;
-
-	if (info->finger_cnt == 0) {
-		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
-						(char *)info->client->name,
-						PRCMU_QOS_DEFAULT_VALUE);
-		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
-						(char *)info->client->name,
-						PRCMU_QOS_DEFAULT_VALUE);
-		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
-						(char *)info->client->name,
-						PRCMU_QOS_DEFAULT_VALUE);
-	}
-#endif
 	mutex_unlock(&info->input_dev_ts->mutex);
 
 	return ret;

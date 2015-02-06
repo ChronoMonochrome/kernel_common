@@ -30,7 +30,7 @@
 
 #include "tma140_download_skomer.h"
 
-#include "./TMA140_FW/Skomer_CY_v01_v0E.h"
+#include "./TMA140_FW/Skomer_CY_v01_v07.h"
 
 #define TSP_SDA 229
 #define TSP_SCL 230
@@ -870,15 +870,14 @@ signed char fXRESInitializeTargetForISSP(void)
 // ============================================================================
 signed char fPowerCycleInitializeTargetForISSP(void)
 {
-    //unsigned char n;
+    unsigned char n;
 
 	/// printk("[TSP] %s, %d\n", __func__, __LINE__);
 
     // Set all pins to highZ to avoid back powering the PSoC through the GPIO
     // protection diodes.
-    SetSCLKHiZ();
-    SetSDATAHiZ();
-    mdelay(10);
+//    SetSCLKHiZ();
+//    SetSDATAHiZ();
 
     // Turn on power to the target device before other signals
     SetTargetVDDStrong();
@@ -894,8 +893,8 @@ signed char fPowerCycleInitializeTargetForISSP(void)
 
     // Set SCLK to high Z so there is no clock and wait for a high to low
     // transition on SDAT. SCLK is not needed this time.
-    //SetSCLKHiZ();
-	//SetSDATAHiZ(); // CY: adding 2012. 02.06
+    SetSCLKHiZ();
+	SetSDATAHiZ(); // CY: adding 2012. 02.06
 
 /*	
     if (fIsError = fDetectHiLoTransition_2()) {
@@ -903,10 +902,9 @@ signed char fPowerCycleInitializeTargetForISSP(void)
         return(INIT_ERROR);
     }
 */
-    
+
 //CY: adding 2012.02.06
-	//delay_us(100);
-	mdelay(1);
+	delay_us(100);
 	if(fSDATACheck())
 	{
 		if (fIsError = fDetectHiLoTransition()) {
@@ -916,16 +914,15 @@ signed char fPowerCycleInitializeTargetForISSP(void)
 	}
 	else
 	{
-		//delay_us(10000);
-		mdelay(10);
+		delay_us(10000);
 	}
 //CY: adding 2012.02.06
 
 
     // Configure the pins for initialization
-    //SetSDATAHiZ();
-    //SetSCLKStrong();
-    //SCLKLow();					//PTJ: DO NOT SET A BREAKPOINT HERE AND EXPECT SILICON ID TO PASS!
+    SetSDATAHiZ();
+    SetSCLKStrong();
+    SCLKLow();					//PTJ: DO NOT SET A BREAKPOINT HERE AND EXPECT SILICON ID TO PASS!
 
     // !!! NOTE:
     //  The timing spec that requires that the first Init-Vector happen within
@@ -1637,7 +1634,7 @@ int cypress_update(int HW_ver)
 	if (fIsError = load_tma140_firmware_data(HW_ver))
     {
         ErrorTrap(fIsError);
-		goto MCSDL_DOWNLOAD_FINISH;
+		return fIsError;
     }
 
 
@@ -1649,14 +1646,15 @@ int cypress_update(int HW_ver)
         if (fIsError = fXRESInitializeTargetForISSP())
         {
             ErrorTrap(fIsError);
-			goto MCSDL_DOWNLOAD_FINISH;
+			return fIsError;
         }
     #else
         // Initialize the Host & Target for ISSP operations
         if (fIsError = fPowerCycleInitializeTargetForISSP())
         {
+            printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
             ErrorTrap(fIsError);
-		goto MCSDL_DOWNLOAD_FINISH;
+			return fIsError;
         }
     #endif
 
@@ -1664,8 +1662,9 @@ int cypress_update(int HW_ver)
     // Run the SiliconID Verification, and proceed according to result.
     if (fIsError = fVerifySiliconID())
     {
+        printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
         ErrorTrap(fIsError);
-		goto MCSDL_DOWNLOAD_FINISH;
+		return fIsError;
     }
     #ifdef TX_ON
         UART_PutCRLF(0);
@@ -1679,6 +1678,7 @@ int cypress_update(int HW_ver)
         // Bulk-Erase the Device.
         if (fIsError = fEraseTarget())
         {
+            printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
             ErrorTrap(fIsError);
 			//return fIsError;
 			goto MCSDL_DOWNLOAD_FINISH;
@@ -1706,6 +1706,7 @@ int cypress_update(int HW_ver)
         {
             if (fIsError = fReadWriteSetup())
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1730,6 +1731,7 @@ int cypress_update(int HW_ver)
 
             if (fIsError = fProgramTargetBlock(bBankCounter,(unsigned char)iBlockCounter))
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1737,6 +1739,7 @@ int cypress_update(int HW_ver)
 
             if (fIsError = fReadStatus())
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1788,6 +1791,7 @@ int cypress_update(int HW_ver)
 
             if (fIsError = fReadWriteSetup())
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1795,6 +1799,7 @@ int cypress_update(int HW_ver)
 
             if (fIsError = fVerifySetup(bBankCounter,(unsigned char)iBlockCounter))
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1802,6 +1807,7 @@ int cypress_update(int HW_ver)
 
 
             if (fIsError = fReadStatus()) {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1809,6 +1815,7 @@ int cypress_update(int HW_ver)
 
 
             if (fIsError = fReadWriteSetup()) {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1816,6 +1823,7 @@ int cypress_update(int HW_ver)
 
 
             if (fIsError = fReadByteLoop()) {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1852,6 +1860,7 @@ int cypress_update(int HW_ver)
 
             if (fIsError = fReadWriteSetup())
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1868,6 +1877,7 @@ int cypress_update(int HW_ver)
             // Secure one bank of the target flash
             if (fIsError = fSecureTargetFlash())
             {
+                printk( "[TSP] %s, %d : Error\n", __func__, __LINE__);
                 ErrorTrap(fIsError);
 				//return fIsError;
 				goto MCSDL_DOWNLOAD_FINISH;
@@ -1919,7 +1929,7 @@ int cypress_update(int HW_ver)
         if (iChecksumTarget != iChecksumData)
         {
             ErrorTrap(CHECKSUM_ERROR);
-		goto MCSDL_DOWNLOAD_FINISH;
+			return fIsError;
         }
 
         #ifdef TX_ON

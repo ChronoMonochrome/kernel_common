@@ -33,7 +33,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
-#include <linux/input/mms1xx_ts.h>
+#include <linux/input/mms134s_ts.h>
 #include <asm/unaligned.h>
 #include <linux/uaccess.h>
 #ifdef TSP_FACTORY
