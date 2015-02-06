@@ -37,7 +37,6 @@
 #include <linux/spinlock.h>
 #include <linux/nfc/pn547.h>
 #include <linux/mfd/abx500/ux500_sysctrl.h>
-#include <linux/wakelock.h>
 
 #define MAX_BUFFER_SIZE	1024
 
@@ -48,7 +47,6 @@ struct pn547_dev	{
 	struct mutex		read_mutex;
 	struct i2c_client	*client;
 	struct miscdevice	pn547_device;
-	struct wake_lock	nfc_wake_lock;
 	unsigned int 		ven_gpio;
 	unsigned int 		firm_gpio;
 	unsigned int		irq_gpio;
@@ -85,7 +83,6 @@ static irqreturn_t pn547_dev_irq_handler(int irq, void *dev_id)
 	/* Wake up waiting readers */
 	wake_up(&pn547_dev->read_wq);
 
-	wake_lock_timeout(&pn547_dev->nfc_wake_lock,2 * HZ);
 	return IRQ_HANDLED;
 }
 
@@ -335,9 +332,6 @@ static int pn547_probe(struct i2c_client *client,
 		goto err_regulator_enable;
 	}
 
-	wake_lock_init(&pn547_dev->nfc_wake_lock,
-		WAKE_LOCK_SUSPEND, "nfc_wake_lock");
-
 	/* request irq.  the irq is set whenever the chip has data available
 	 * for reading.  it is cleared when all data has been read.
 	 */
@@ -350,13 +344,11 @@ static int pn547_probe(struct i2c_client *client,
 		goto err_request_irq_failed;
 	}
 	pn547_disable_irq(pn547_dev);
-	enable_irq_wake(pn547_dev->client->irq);
 	i2c_set_clientdata(client, pn547_dev);
 
 	return 0;
 
 err_request_irq_failed:
-	wake_lock_destroy(&pn547_dev->nfc_wake_lock);
 	misc_deregister(&pn547_dev->pn547_device);
 err_regulator_enable:
 	regulator_disable(pn547_dev->nfc_regulator);
@@ -380,7 +372,6 @@ static int pn547_remove(struct i2c_client *client)
 
 	pr_info("%s ++ \n", __func__);
 	pn547_dev = i2c_get_clientdata(client);
-	wake_lock_destroy(&pn547_dev->nfc_wake_lock);
 	free_irq(client->irq, pn547_dev);
 	misc_deregister(&pn547_dev->pn547_device);
 	mutex_destroy(&pn547_dev->read_mutex);
