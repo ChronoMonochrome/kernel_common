@@ -400,22 +400,6 @@ static ssize_t show_usb_state(struct device *dev, struct device_attribute *attr,
 	return snprintf(buf, 25, "USB_STATE_NOTCONFIGURED\n");
 }
 
-static ssize_t show_adc(struct device *dev, struct device_attribute *attr,
-				char *buf)
-{
-	unsigned char adc;
-	int ret;
-
-	ret = read_FSA9480_register(&driver_instance, FSA9490_ADC_REGISTER, &adc);
-	if (ret < 0) {
-		dev_err(driver_instance.dev,
-			"%s: err at read adc %d\n", __func__, adc);
-		return snprintf(buf, 9, "UNKNOWN\n");
-	}
-
-	return snprintf(buf, 4, "%x\n", adc);
-}
-
 static struct device_attribute FSA9480_device_attrs[] = {
 	__ATTR(connection, 0444, show_current_connection, NULL),
 	__ATTR(charger, 0444, show_charger_connection, NULL),
@@ -424,7 +408,6 @@ static struct device_attribute FSA9480_device_attrs[] = {
 };
 
 static DEVICE_ATTR(usb_state, 0444, show_usb_state, NULL);
-static DEVICE_ATTR(adc, 0444, show_adc, NULL);
 
 static int FSA9480_readproc(char *page, char **start, off_t off,
 		int count, int *eof, void *data)
@@ -618,8 +601,6 @@ static void usb_switch_notify_clients(struct work_struct *work)
 	}
 
 	/* Desktop Dock Support */
-#ifndef  CONFIG_MACH_CODINA_CHN
-/*weichang.dong remove Desktop Dock Support for codina chn 4.1.2  */
 	if (instance->last_event == (USB_SWITCH_CONNECTION_EVENT | EXTERNAL_AV_CABLE)) {
 		if (id == FC_9485) {	
 			printk(KERN_INFO "%s: GPIO #200 Value : %x\n", __func__, gpio_get_value(200));
@@ -630,10 +611,7 @@ static void usb_switch_notify_clients(struct work_struct *work)
 			write_FSA9480_register(instance, FSA9490_CONTROL_REGISTER, c);
 		}	
 		switch_set_state(&switch_dock, 1);
-	} else 
-#endif
-
-    if (instance->last_event == USB_SWITCH_DISCONNECTION_EVENT &&
+	} else if (instance->last_event == USB_SWITCH_DISCONNECTION_EVENT &&
 			instance->prev_event == (USB_SWITCH_CONNECTION_EVENT | EXTERNAL_AV_CABLE)) {
 		if (id == FC_9485) {	
 			printk(KERN_INFO "%s: GPIO #200 Value : %x\n", __func__, gpio_get_value(200));
@@ -862,18 +840,14 @@ static int init_driver_instance(struct FSA9480_instance *instance, struct i2c_cl
 				printk(KERN_INFO "device_create_file failed for file %s error =%d\n", FSA9480_device_attrs[i].attr.name, ret);
 	}
 
+	/* /sys/class/sec/switch/usb_state */
 	micro_usb_switch = device_create(sec_class, NULL, 0, NULL, "switch");
 	if (IS_ERR(micro_usb_switch)) {
 		printk(KERN_ERR "Failed to create device(sec_switch)!\n");
 	}
-	/* /sys/class/sec/switch/usb_state */
 	if (device_create_file(micro_usb_switch, &dev_attr_usb_state) < 0)
 		printk(KERN_ERR "Failed to create device file(%s)!\n",
 				dev_attr_usb_state.attr.name);
-	/* /sys/class/sec/switch/adc */
-	if (device_create_file(micro_usb_switch, &dev_attr_adc) < 0)
-			printk(KERN_ERR "Failed to create device file(%s)!\n",
-					dev_attr_adc.attr.name);
 
 	blocking_notifier_call_chain(&usb_switch_notifier, USB_SWITCH_DRIVER_STARTED | instance->last_event, NULL);
 	instance->started = 1;
