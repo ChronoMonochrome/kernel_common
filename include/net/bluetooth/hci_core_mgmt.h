@@ -25,6 +25,7 @@
 #ifndef __HCI_CORE_H
 #define __HCI_CORE_H
 
+#include <linux/kgdb.h>
 #include <net/bluetooth/hci.h>
 
 /* HCI priority */
@@ -206,9 +207,6 @@ struct hci_dev {
 	unsigned int	sco_pkts;
 	unsigned int	le_pkts;
 
-#ifdef CONFIG_BT_CG2900
-	__u16	reinitiate_handle;
-#endif
 	unsigned long	acl_last_tx;
 	unsigned long	sco_last_tx;
 	unsigned long	le_last_tx;
@@ -217,17 +215,11 @@ struct hci_dev {
 
 	struct work_struct	power_on;
 	struct delayed_work power_off;
-#ifdef CONFIG_BT_CG2900
-	struct work_struct	reinitiate_auth;
-#endif
 
 	__u16			discov_timeout;
 	struct delayed_work	discov_off;
 
 	struct delayed_work	service_cache;
-#ifdef CONFIG_BT_CG2900
-	struct timer_list	reinitiate_auth_timer;
-#endif
 
 	struct timer_list	cmd_timer;
 	struct tasklet_struct	cmd_task;
