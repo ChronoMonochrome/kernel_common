@@ -255,7 +255,7 @@ static int hva40wv1_display_update(struct mcde_display_device *ddev,
 	if (lcd->turn_on_backlight == true){
 		lcd->turn_on_backlight = false;
 		/* Allow time for one frame to be sent to the display before switching on the backlight */
-		msleep(30);
+		msleep(20);
 		if (lcd->pd->bl_on_off)
 			lcd->pd->bl_on_off(true);
 	}
@@ -712,18 +712,6 @@ static int __devinit hva40wv1_probe(struct mcde_display_device *ddev)
 	lcd->dev = &ddev->dev;
 	lcd->pd = pdata;
 	lcd->justStarted = true;
-
-	gpio_request(pdata->lcd_detect, "LCD DETECT");
-
-	/* low is normal. On PBA esd_port could be HIGH */
-	if (!gpio_get_value(pdata->lcd_detect)) {
-		dev_info(&ddev->dev,"esd port is low!\n");
-		lcd->ddev->port->phy.dsi.check_pba = false;
-	} else {
-		lcd->ddev->port->phy.dsi.check_pba = true;
-		dev_info(&ddev->dev,"esd port is high!\n");
-	}
-
 	memcpy(lcd->lcd_id, pdata->lcdId, 3);
 
 #ifdef CONFIG_LCD_CLASS_DEVICE
