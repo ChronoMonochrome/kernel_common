@@ -129,8 +129,6 @@ obj-$(CONFIG_MODEM)		+= modem/
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_NFC)		+= nfc/
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
-<<<<<<< HEAD
-=======
 
 # Virtualization drivers
 obj-$(CONFIG_VIRT_DRIVERS)	+= virt/
@@ -145,4 +143,3 @@ obj-y   += exfat/
 endif
 
 
->>>>>>> b261696... drivers/
