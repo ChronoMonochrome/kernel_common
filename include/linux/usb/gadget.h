@@ -430,6 +430,21 @@ struct usb_gadget_ops {
 	int	(*pullup) (struct usb_gadget *, int is_on);
 	int	(*ioctl)(struct usb_gadget *,
 				unsigned code, unsigned long param);
+<<<<<<< HEAD
+=======
+	void	(*get_config_params)(struct usb_dcd_config_params *);
+	int	(*udc_start)(struct usb_gadget *,
+			struct usb_gadget_driver *);
+	int	(*udc_stop)(struct usb_gadget *,
+			struct usb_gadget_driver *);
+
+	/* Those two are deprecated */
+	int	(*start)(struct usb_gadget_driver *,
+			int (*bind)(struct usb_gadget *));
+	int	(*stop)(struct usb_gadget_driver *);
+	struct usb_ep* (*configure_ep)(struct usb_gadget *, u8 type,
+				struct usb_endpoint_descriptor *);
+>>>>>>> 8f44c11... drivers/usb/gadget
 };
 
 /**
@@ -486,6 +501,11 @@ struct usb_gadget {
 	unsigned			b_hnp_enable:1;
 	unsigned			a_hnp_support:1;
 	unsigned			a_alt_hnp_support:1;
+#ifdef CONFIG_USB_OTG_20
+	unsigned                        host_request:1;
+	unsigned			otg_hnp_reqd:1;
+	unsigned			otg_srp_reqd:1;
+#endif
 	const char			*name;
 	struct device			dev;
 };
