@@ -243,9 +243,6 @@ static struct prcmu_early_data default_early_fops = {
 	.request_clock = dummy_request_clock,
 
 	/*  direct register access */
-#if defined(CONFIG_MACH_SEC_GOLDEN_CHN) || defined(CONFIG_MACH_GAVINI_CHN) || defined(CONFIG_MACH_CODINA_CHN) 
-	.tcdm_read = dummy_read, /* Reuse the dummy_read */
-#endif
 	.read = dummy_read,
 	.write =  dummy_write,
 	.write_masked = default_write_masked,
@@ -299,12 +296,6 @@ void prcmu_system_reset(u16 reset_code)
 {
 	dbx500_prcmu_context.pearly->system_reset(reset_code);
 }
-#if defined(CONFIG_MACH_SEC_GOLDEN_CHN) || defined(CONFIG_MACH_GAVINI_CHN) || defined(CONFIG_MACH_CODINA_CHN) 
-u32 prcmu_tcdm_read(unsigned int reg)
-{
-	return	dbx500_prcmu_context.pearly->tcdm_read(reg);
-}
-#endif
 
 u32 prcmu_read(unsigned int reg)
 {
@@ -757,7 +748,7 @@ static int __init dbx500_prcmu_probe(struct platform_device *pdev)
 }
 
 /* No action required in suspend/resume, thus the lack of functions */
-static struct platform_driver dbx500_prcmu_driver = {
+static struct platform_driver dbx500_prcmu_driver __refdata = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "dbx500-prcmu",

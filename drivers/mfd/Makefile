@@ -2,6 +2,7 @@
 # Makefile for multifunction miscellaneous devices
 #
 
+obj-$(CONFIG_AB5500_CORE)	+= ab5500-core.o ab5500-power.o
 88pm860x-objs			:= 88pm860x-core.o 88pm860x-i2c.o
 obj-$(CONFIG_MFD_88PM860X)	+= 88pm860x.o
 obj-$(CONFIG_MFD_SM501)		+= sm501.o
@@ -16,13 +17,17 @@ obj-$(CONFIG_MFD_DM355EVM_MSP)	+= dm355evm_msp.o
 obj-$(CONFIG_MFD_TI_SSP)	+= ti-ssp.o
 
 obj-$(CONFIG_MFD_STMPE)		+= stmpe.o
+obj-$(CONFIG_STMPE_I2C)		+= stmpe-i2c.o
+obj-$(CONFIG_STMPE_SPI)		+= stmpe-spi.o
 obj-$(CONFIG_MFD_TC3589X)	+= tc3589x.o
+obj-$(CONFIG_MFD_TC35892)	+= tc35892.o
 obj-$(CONFIG_MFD_T7L66XB)	+= t7l66xb.o tmio_core.o
 obj-$(CONFIG_MFD_TC6387XB)	+= tc6387xb.o tmio_core.o
 obj-$(CONFIG_MFD_TC6393XB)	+= tc6393xb.o tmio_core.o
 
 obj-$(CONFIG_MFD_WM8400)	+= wm8400-core.o
 wm831x-objs			:= wm831x-core.o wm831x-irq.o wm831x-otp.o
+wm831x-objs			+= wm831x-auxadc.o
 obj-$(CONFIG_MFD_WM831X)	+= wm831x.o
 obj-$(CONFIG_MFD_WM831X_I2C)	+= wm831x-i2c.o
 obj-$(CONFIG_MFD_WM831X_SPI)	+= wm831x-spi.o
@@ -35,13 +40,19 @@ obj-$(CONFIG_MFD_WM8994)	+= wm8994-core.o wm8994-irq.o
 obj-$(CONFIG_TPS6105X)		+= tps6105x.o
 obj-$(CONFIG_TPS65010)		+= tps65010.o
 obj-$(CONFIG_TPS6507X)		+= tps6507x.o
+obj-$(CONFIG_MFD_TPS65910)	+= tps65910.o tps65910-irq.o
+tps65912-objs                   := tps65912-core.o tps65912-irq.o
+obj-$(CONFIG_MFD_TPS65912)	+= tps65912.o
+obj-$(CONFIG_MFD_TPS65912_I2C)	+= tps65912-i2c.o
+obj-$(CONFIG_MFD_TPS65912_SPI)  += tps65912-spi.o
 obj-$(CONFIG_MENELAUS)		+= menelaus.o
 
 obj-$(CONFIG_TWL4030_CORE)	+= twl-core.o twl4030-irq.o twl6030-irq.o
 obj-$(CONFIG_TWL4030_MADC)      += twl4030-madc.o
 obj-$(CONFIG_TWL4030_POWER)    += twl4030-power.o
-obj-$(CONFIG_TWL4030_CODEC)	+= twl4030-codec.o
+obj-$(CONFIG_MFD_TWL4030_AUDIO)	+= twl4030-audio.o
 obj-$(CONFIG_TWL6030_PWM)	+= twl6030-pwm.o
+obj-$(CONFIG_TWL6040_CORE)	+= twl6040-core.o twl6040-irq.o
 
 obj-$(CONFIG_MFD_MC13XXX)	+= mc13xxx-core.o
 
@@ -75,11 +86,15 @@ obj-$(CONFIG_AB3100_OTP)	+= ab3100-otp.o
 obj-$(CONFIG_AB3550_CORE)	+= ab3550-core.o
 obj-$(CONFIG_AB8500_CORE)	+= ab8500-core.o ab8500-sysctrl.o
 obj-$(CONFIG_AB8500_DEBUG)	+= ab8500-debugfs.o
+obj-$(CONFIG_AB8500_DENC)	+= ab8500-denc.o
 obj-$(CONFIG_AB8500_GPADC)	+= ab8500-gpadc.o
+obj-$(CONFIG_DBX500_PRCMU)      += dbx500-prcmu.o
 obj-$(CONFIG_MFD_DB8500_PRCMU)	+= db8500-prcmu.o
+obj-$(CONFIG_MFD_DBX540_PRCMU)  += dbx540-prcmu.o
 # ab8500-i2c need to come after db8500-prcmu (which provides the channel)
 obj-$(CONFIG_AB8500_I2C_CORE)	+= ab8500-i2c.o
 obj-$(CONFIG_MFD_DB5500_PRCMU)	+= db5500-prcmu.o
+obj-$(CONFIG_AB5500_GPADC)	+= ab5500-gpadc.o
 obj-$(CONFIG_MFD_TIMBERDALE)    += timberdale.o
 obj-$(CONFIG_PMIC_ADP5520)	+= adp5520.o
 obj-$(CONFIG_LPC_SCH)		+= lpc_sch.o
@@ -93,5 +108,5 @@ obj-$(CONFIG_MFD_CS5535)	+= cs5535-mfd.o
 obj-$(CONFIG_MFD_OMAP_USB_HOST)	+= omap-usb-host.o
 obj-$(CONFIG_MFD_PM8921_CORE) 	+= pm8921-core.o
 obj-$(CONFIG_MFD_PM8XXX_IRQ) 	+= pm8xxx-irq.o
-obj-$(CONFIG_MFD_TPS65910)	+= tps65910.o tps65910-irq.o
 obj-$(CONFIG_TPS65911_COMPARATOR)	+= tps65911-comparator.o
+obj-$(CONFIG_MFD_AAT2870_CORE)	+= aat2870-core.o
