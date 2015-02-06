@@ -87,17 +87,10 @@
 #define VT_CAM_ID 66    /*  VT_CAM_ID GPIO number*/
 #endif
 
-#define ON 1  // GPIO Power On
-#define OFF 0 // GPIO Power Off
-
-int vt_id;    // Global variable  (VT_CAM_ID) value
-int vendorID; // Global variable for 5M SOC Camera vendor ID
+#define ON 1  /* GPIO Power On*/
+#define OFF 0 /* GPIO Power Off*/
+int vt_id;   /* Global variable  (VT_CAM_ID) value*/
 int assistive_mode;
-
-#if defined (CONFIG_TORCH_FLASH)
-extern int Torch_Flash_mode;
-extern void Torch_Flash_Off_by_cam();
-#endif
 
 /* Function Pointer Declaration */
 int  (*subPMIC_module_init)(void);
@@ -105,13 +98,6 @@ void (*subPMIC_module_exit)(void);
 int  (*subPMIC_PowerOn)(int);
 int  (*subPMIC_PowerOff)(int);
 int  (*subPMIC_PinOnOff)(int, int);
-
-/* Device struct declaration */
-struct device *cam_dev;
-struct device *flash_dev;
-struct device *cam_dev_front;
-struct device *cam_dev_rear;
-struct device *cam_dev_flash;
 
 struct trace_block {
 	u32 msg_id;
@@ -153,18 +139,18 @@ struct mmio_info {
 #define PRIMARY_CAMERA_STBY  142
 #define PRIMARY_CAMERA_RESET 149
 
-#define SECONDARY_CAMERA_DVDD  72 /* VT_DVDD_1V8 */
-#define SECONDARY_CAMERA_VDDIO 73 /* CAM_VDDIO_1V8 */
-#define SECONDARY_CAMERA_AVDD  74 /* VT_AVDD_2V8 */
+#define SECONDARY_CAMERA_DVDD 72	/* VT_DVDD_1V8 */
+#define SECONDARY_CAMERA_VDDIO 73		/* CAM_VDDIO_1V8 */
+#define SECONDARY_CAMERA_AVDD 74	/* VT_AVDD_2V8 */
 
-#define SECONDARY_CAMERA_STBY  64
+#define SECONDARY_CAMERA_STBY 64
 #define SECONDARY_CAMERA_RESET 65
 
 #if defined(CONFIG_MACH_SEC_SKOMER) || defined(CONFIG_MACH_SEC_HENDRIX)
 #define COMMON_CAMERA_VFUSE 66
 #endif
 
-#define FLASH_EN    140
+#define FLASH_EN  140
 #define FLASH_MODE  141
 
 void sec_camera_gpio_init(void)
@@ -1539,9 +1525,6 @@ static int mmio_cam_flash_set_mode(struct mmio_info *info, int lux_val)
 void mmio_cam_flash_rt8515(int lux_val)
 {
 	int i;
-	#if defined(CONFIG_MACH_SEC_SKOMER)
-	printk(KERN_DEBUG "mmio_cam_flash_rt8515, Control Value = [%d]\n", lux_val);
-	#endif
 
 	if(0 < lux_val && lux_val <= 16)  /* Flash mode -> Static Brightness */
 	{
@@ -1572,9 +1555,6 @@ void mmio_cam_flash_rt8515(int lux_val)
 		gpio_set_value(FLASH_EN, 0);
 		gpio_set_value(FLASH_MODE, 0);
 	}
-	#if defined(CONFIG_MACH_SEC_SKOMER)
-	printk(KERN_DEBUG "End of Setting Value for Flash \n");	
-	#endif
 }
 
 void mmio_cam_flash_ktd262(int lux_val)
@@ -1618,12 +1598,6 @@ static int mmio_cam_flash_on_off(struct mmio_info *info, int set, int on)
 	int i = 0;
 	int lux_val = on;
 
-#if defined (CONFIG_TORCH_FLASH)
-	if (Torch_Flash_mode == 1) {
-		Torch_Flash_Off_by_cam();		
-	}
-#endif
-	
 #if defined(CONFIG_MACH_JANICE) || defined(CONFIG_MACH_GAVINI)
 	if (lux_val == 100) {
 		gpio_set_value(FLASH_EN, 0);
@@ -1692,6 +1666,7 @@ static int mmio_cam_flash_on_off(struct mmio_info *info, int set, int on)
 #endif
 	return 0;		/* Always success */
 }
+
 
 static long mmio_ioctl(struct file *filp, u32 cmd,
 		unsigned long arg)
@@ -1944,18 +1919,6 @@ static long mmio_ioctl(struct file *filp, u32 cmd,
 			}
 			break;
 
-        case MMIO_CAM_REAR_VENDOR_ID:
-            dev_dbg(info->dev, "mmio_ioctl: MMIO_CAM_REAR_VENDOR_ID\n");
-            {
-                /* get vendor id from userspace using IOCTL */
-                if(copy_from_user(&vendorID, (int *)arg, sizeof(vendorID))){
-                    dev_err(info->dev, "Copy from userspace failed\n");
-                    ret = -EFAULT;
-                    break;
-                }               
-            }
-            break;
-			
 		case MMIO_CAM_GPIO_PIN_CONTROL:
 			dev_dbg(info->dev, "mmio_ioctl: MMIO_CAM_GPIO_PIN_CONTROL\n");
 			{
@@ -2241,6 +2204,12 @@ out_err:
 
 /*godin +*/
 
+struct device *cam_dev;
+struct device *flash_dev;
+struct device *cam_dev_front;
+struct device *cam_dev_rear;
+struct device *cam_dev_flash;
+
 	static ssize_t
 front_camera_type_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -2277,38 +2246,26 @@ rear_flash_enable_store(struct device *dev,
 	if (buf[0] == '0') {
 		assistive_mode = 0;
 		mmio_cam_flash_on_off(info, 3, 0);
-		#if defined(CONFIG_MACH_SEC_SKOMER)
-		printk(KERN_DEBUG "rear_flash_enable_store, Control Value = [0]\n");
-		#endif
 	} else {
 		assistive_mode = 1;
 #if defined CONFIG_MACH_GAVINI
 		mmio_cam_flash_on_off(info, 2, (100+5));
 #else
 		mmio_cam_flash_on_off(info, 3, (100+3));
-		#if defined(CONFIG_MACH_SEC_SKOMER)
-		printk(KERN_DEBUG "rear_flash_enable_store, Control Value = [100+3]\n");
-		#endif
 #endif
 	}
 	return size;
 }
 
-static ssize_t rear_vendor_id_store(struct device *dev, struct device_attribute *attr, char *buf)
-{
-    return sprintf(buf, "0x%04x\n", (short)vendorID); // Write camera vendor ID (Ex: 0x0201)
-}
-
 static DEVICE_ATTR(camtype, 0440, rear_camera_type_show, NULL);
 static DEVICE_ATTR(enable, 0220, NULL, rear_flash_enable_store);
-static DEVICE_ATTR(front_camtype, 0440, front_camera_type_show, NULL); // Front camera type attribute
-static DEVICE_ATTR(rear_camtype, 0440, rear_camera_type_show, NULL); // Rear camera type attribute
+static DEVICE_ATTR(front_camtype, 0440, front_camera_type_show, NULL);
+static DEVICE_ATTR(rear_camtype, 0440, rear_camera_type_show, NULL);
 static DEVICE_ATTR(rear_flash, 0220, NULL, rear_flash_enable_store);
-static DEVICE_ATTR(rear_vendorid, 0440, rear_vendor_id_store, NULL); // Rear camera vendor ID attribute
 
 void sec_cam_init(void)
 {
-    // Camera type device
+
 	cam_dev = device_create(sec_class, NULL, 0, NULL, "sec_cam");
 	if (IS_ERR(cam_dev))
 		pr_err("Failed to create device(sec_cam)!\n");
@@ -2317,7 +2274,6 @@ void sec_cam_init(void)
 				__func__, dev_attr_camtype.attr.name);
 	}
 
-    // Flash device
 	flash_dev = device_create(sec_class, NULL, 0, NULL, "flash");
 	if (IS_ERR(flash_dev))
 		pr_err("Failed to create device(flash_dev)!\n");
@@ -2326,7 +2282,6 @@ void sec_cam_init(void)
 				__func__, dev_attr_enable.attr.name);
 	}
 
-    // Front camera device
 	cam_dev_front = device_create(camera_class, NULL, 0, NULL, "front");
 	if (IS_ERR(cam_dev_front))
 		pr_err("Failed to create device(cam_dev_front)!\n");
@@ -2336,32 +2291,26 @@ void sec_cam_init(void)
 				__func__, dev_attr_front_camtype.attr.name);
 	}
 
-    // Rear camera device
-	cam_dev_rear = device_create(camera_class, NULL, 0, NULL, "rear"); // Rear camera device created
-	if(IS_ERR(cam_dev_rear))
+	cam_dev_rear = device_create(camera_class, NULL, 0, NULL, "rear");
+	if (IS_ERR(cam_dev_rear))
 		pr_err("Failed to create device(cam_dev_rear)!\n");
 
-	if(device_create_file(cam_dev_rear, &dev_attr_rear_camtype) < 0){ // Rear camera type
+	if (device_create_file(cam_dev_rear, &dev_attr_rear_camtype) < 0) {
 		printk(KERN_DEBUG "%s: failed to create device file, %s\n",
 				__func__, dev_attr_rear_camtype.attr.name);
 	}
 
-	if(device_create_file(cam_dev_rear, &dev_attr_rear_flash) < 0){ // Rear camera Flash
+	if (device_create_file(cam_dev_rear, &dev_attr_rear_flash) < 0) {
 		printk(KERN_DEBUG "%s: failed to create device file, %s\n",
 				__func__, dev_attr_rear_flash.attr.name);
-    }
+	}
 
-    if(device_create_file(cam_dev_rear, &dev_attr_rear_vendorid) <0){ // Vendor ID
-        printk(KERN_DEBUG "%s: failed to create device file, %s\n", 
-                __func__, dev_attr_rear_vendorid.attr.name);
-    }	
 
-    // Camera flash device
 	cam_dev_flash = device_create(camera_class, NULL, 0, NULL, "flash");
 	if (device_create_file(cam_dev_flash, &dev_attr_rear_flash) < 0) {
 		printk(KERN_DEBUG "%s: failed to create device file, %s\n",
 				__func__, dev_attr_rear_flash.attr.name);
-    }
+	}
 }
 
 /**
