@@ -1915,7 +1915,6 @@ static struct ab8500_force_reg ab8500_force_reg[] = {
 		.mask = 0x03,
 		.val  = 0x03,
  	},
-#ifndef CONFIG_MACH_GAVINI
 	{
 		/* Vaux4Regu */
 		.name = "Vaux4Regu",
@@ -1924,7 +1923,6 @@ static struct ab8500_force_reg ab8500_force_reg[] = {
  		.mask = 0x03,
 		.val  = 0x00,
 	},
-#endif
 #ifdef CONFIG_MACH_SEC_KYLE
 	{
 		/* Vaux6Ctrl */
