@@ -1009,8 +1009,7 @@ void musb_g_rx(struct musb *musb, u8 epnum)
 		}
 #endif
 		musb_g_giveback(musb_ep, request, 0);
-<<<<<<< HEAD
-=======
+
 		/*
 		* In the giveback function the MUSB lock is
 		* released and acquired after sometime. During
@@ -1020,7 +1019,6 @@ void musb_g_rx(struct musb *musb, u8 epnum)
 		* right registers
 		*/
 		musb_ep_select(mbase, epnum);
->>>>>>> acf6d28... drivers/usb/musb
 
 		req = next_request(musb_ep);
 		if (!req)
