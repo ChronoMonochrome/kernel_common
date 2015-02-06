@@ -2483,13 +2483,7 @@ static irqreturn_t ab8500_charger_mainchplugdet_handler(int irq, void *_di)
 static irqreturn_t ab8500_charger_mainextchnotok_handler(int irq, void *_di)
 {
 	struct ab8500_charger *di = _di;
-	#ifdef CONFIG_MACH_GAVINI
-	di->flags.mainextchnotok = true;
-	power_supply_changed(&di->ac_chg.psy);
-	power_supply_changed(&di->usb_chg.psy);
-	queue_delayed_work(di->charger_wq, &di->check_hw_failure_work, 0);
-	#endif
-	
+
 	/*
 	dev_info(di->dev, "Main charger not ok\n");
 	di->flags.mainextchnotok = true;
@@ -2725,12 +2719,7 @@ static irqreturn_t ab8500_charger_vbus_drop_handler(int irq, void *_di)
 static irqreturn_t ab8500_charger_vbusovv_handler(int irq, void *_di)
 {
 	struct ab8500_charger *di = _di;
-	#ifdef CONFIG_MACH_GAVINI
-	di->flags.vbus_ovv = true;
-	power_supply_changed(&di->ac_chg.psy);
-	power_supply_changed(&di->usb_chg.psy);
-	queue_delayed_work(di->charger_wq, &di->check_hw_failure_work, 0);
-	#endif
+
 	/* dev_info(di->dev, "VBUS overvoltage detected\n"); */
 
 	/* We are not using VBUS OVV. but using MAINCH OVV
@@ -2936,7 +2925,7 @@ static int ab8500_charger_init_hw_registers(struct ab8500_charger *di)
 	/*
 	 * Due to internal synchronisation, Enable and Kick watchdog bits
 	 * cannot be enabled in a single write.
-	 * A minimum delay of 2*32 kHz period (62.5Ã‚Âµs) must be inserted
+	 * A minimum delay of 2*32 kHz period (62.5µs) must be inserted
 	 * between writing Enable then Kick bits.
 	 */
 	udelay(63);

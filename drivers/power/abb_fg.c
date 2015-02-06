@@ -417,9 +417,6 @@ static enum power_supply_property ab8500_fg_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
-	#if defined(CONFIG_MACH_JANICE) || 	defined(CONFIG_MACH_CODINA) || 	defined(CONFIG_MACH_GAVINI)
-	POWER_SUPPLY_PROP_CAPACITY_RAW, 
-	#endif
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN,
 };
@@ -2212,7 +2209,6 @@ static int ab8500_fg_reenable_charging(struct ab8500_fg *di)
 			di->reenable_charing++;
 	}
 
-
 	return 0;
 }
 
@@ -2568,13 +2564,7 @@ static int ab8500_fg_get_property(struct power_supply *psy,
 		else
 			val->intval = di->bat_cap.prev_level;
 		break;
-#if defined(CONFIG_MACH_JANICE) || 	defined(CONFIG_MACH_CODINA) || 	defined(CONFIG_MACH_GAVINI)
-	case POWER_SUPPLY_PROP_CAPACITY_RAW:
 
-		val->intval = (di->bat_cap.mah  * 1000) / di->bat_cap.max_mah ;
-		printk("raw soc = %d",val->intval);
-		break;
-#endif
 	/* Instantaneous vbat ADC value */
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		di->vbat = ab8500_fg_bat_voltage(di, false);
