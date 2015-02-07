@@ -165,7 +165,7 @@ static int ux500_pd_suspend_noirq(struct device *dev)
 		return 0;
 
 	/* Already is runtime suspended?  Nothing to do. */
-	if (pm_runtime_status_suspended(dev))
+	if (dev->power.runtime_status == RPM_SUSPENDED)
 		return 0;
 
 	/*
@@ -190,7 +190,7 @@ static int ux500_pd_resume_noirq(struct device *dev)
 	 * Already was runtime suspended?  No need to resume here, runtime
 	 * resume will take care of it.
 	 */
-	if (pm_runtime_status_suspended(dev))
+	if (dev->power.runtime_status == RPM_SUSPENDED)
 		return 0;
 
 	/*
@@ -206,7 +206,7 @@ static int ux500_pd_amba_suspend_noirq(struct device *dev)
 	struct pm_runtime_data *prd = __to_prd(dev);
 	int (*callback)(struct device *) = NULL;
 	int ret = 0;
-	bool is_suspended = pm_runtime_status_suspended(dev);
+	bool is_suspended = dev->power.runtime_status == RPM_SUSPENDED;
 
 	dev_vdbg(dev, "%s()\n", __func__);
 
@@ -234,7 +234,7 @@ static int ux500_pd_amba_resume_noirq(struct device *dev)
 	struct pm_runtime_data *prd = __to_prd(dev);
 	int (*callback)(struct device *) = NULL;
 	int ret = 0;
-	bool is_suspended = pm_runtime_status_suspended(dev);
+	bool is_suspended = dev->power.runtime_status == RPM_SUSPENDED;
 
 	dev_vdbg(dev, "%s()\n", __func__);
 
