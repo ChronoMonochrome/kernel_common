@@ -100,6 +100,7 @@ struct s6d27a1_dpi {
 	unsigned int				power;
 	unsigned int				current_brightness;
 	unsigned int				bl;
+	bool					turn_on_backlight;
 	unsigned int				ldi_state;
 	unsigned char				panel_id;
 	bool 					opp_is_requested;
@@ -113,6 +114,7 @@ struct s6d27a1_dpi {
 #ifdef ESD_OPERATION
 	unsigned int				lcd_connected;
 	unsigned int				esd_enable;
+	bool					esd_processing;
 	unsigned int				esd_port;
 	struct workqueue_struct			*esd_workqueue;
 	struct work_struct			esd_work;
@@ -228,6 +230,12 @@ static const u8 DCS_CMD_SEQ_S6D27A1_ORIENT_180[] = {
 	DCS_CMD_SEQ_END
 };
 
+extern bool power_off_charging;
+extern u32 sec_bootmode;
+
+#if defined(CONFIG_MACH_CODINA_CHN) || defined(CONFIG_MACH_CODINA_EURO) || defined(CONFIG_MACH_CODINA)
+extern u32 sec_lpm_bootmode;
+#endif
 static int s6d27a1_write_dcs_sequence(struct s6d27a1_dpi *lcd, const u8 *p_seq);
 
 static void print_vmode(struct device *dev, struct mcde_video_mode *vmode)
@@ -364,6 +372,45 @@ static void s6d27a1_release_opp(struct s6d27a1_dpi *lcd)
 	}
 }
 
+/* Reverse order of power on and channel update as compared with MCDE default display update */
+static int s6d27a1_display_update(struct mcde_display_device *ddev,
+							bool tripple_buffer)
+{
+	int ret = 0;
+	struct s6d27a1_dpi *lcd = dev_get_drvdata(&ddev->dev);
+
+	/*Protection code for  power on /off test */
+	if((lcd->dev <= 0) || (lcd->mdd <= 0) || (lcd->dev->platform_data <= 0))
+		return ret;
+
+	if (ddev->power_mode != MCDE_DISPLAY_PM_ON && ddev->set_power_mode) {
+		ret = ddev->set_power_mode(ddev, MCDE_DISPLAY_PM_ON);
+		if (ret < 0) {
+			dev_warn(&ddev->dev,
+				"%s:Failed to set power mode to on\n",
+				__func__);
+			return ret;
+		}
+	}
+
+	ret = mcde_chnl_update(ddev->chnl_state, tripple_buffer);
+	if (ret < 0) {
+		dev_warn(&ddev->dev, "%s:Failed to update channel\n", __func__);
+		return ret;
+	}
+	if (lcd->turn_on_backlight == false){
+
+		lcd->turn_on_backlight = true;
+		/* Allow time for one frame to be sent to the display before switching on the backlight */
+		if (lcd->pd->bl_on_off) {
+			lcd->pd->bl_on_off(false);			
+			msleep(20);
+			lcd->pd->bl_on_off(true);			
+		}
+	}
+		
+	return 0;
+}
 
 static int s6d27a1_set_rotation(struct mcde_display_device *ddev,
 	enum mcde_display_rotation rotation)
@@ -624,6 +671,19 @@ static int s6d27a1_dpi_power_on(struct s6d27a1_dpi *lcd)
 
 	s6d27a1_update_brightness(lcd);
 
+#ifdef ESD_OPERATION
+	if (lcd->lcd_connected)
+		enable_irq(GPIO_TO_IRQ(lcd->esd_port));
+
+	if (lcd->lcd_connected) {
+		irq_set_irq_type(GPIO_TO_IRQ(lcd->esd_port), IRQF_TRIGGER_RISING);
+		lcd->esd_enable = 1;
+		pr_info("%s change lcd->esd_enable :%d \n", __func__,
+				lcd->esd_enable);
+	} else
+		pr_info("%s lcd_connected : %d \n", __func__, lcd->lcd_connected);
+#endif
+
 	return 0;
 }
 
@@ -632,7 +692,24 @@ static int s6d27a1_dpi_power_off(struct s6d27a1_dpi *lcd)
 	int ret = 0;
 	struct ssg_dpi_display_platform_data *dpd = NULL;
 
-	dev_dbg(lcd->dev, "s6d27a1_dpi_power_off\n");
+	dev_dbg(lcd->dev, "s6d27a1_dpi_power_off \n");
+
+#ifdef ESD_OPERATION
+	if (lcd->esd_enable) {
+
+		lcd->esd_enable = 0;
+		irq_set_irq_type(GPIO_TO_IRQ(lcd->esd_port), IRQF_TRIGGER_NONE);
+		disable_irq_nosync(GPIO_TO_IRQ(lcd->esd_port));
+
+		if (!list_empty(&(lcd->esd_work.entry))) {
+			cancel_work_sync(&(lcd->esd_work));
+			pr_info("%s cancel_work_sync", __func__);
+		}
+
+		pr_info("%s change lcd->esd_enable :%d\n", __func__,
+				lcd->esd_enable);
+	}
+#endif
 
 	dpd = lcd->pd;
 	if (!dpd) {
@@ -687,30 +764,42 @@ static void esd_work_func(struct work_struct *work)
 {
 	struct s6d27a1_dpi *lcd = container_of(work,
 					struct s6d27a1_dpi, esd_work);
+#if defined(CONFIG_MACH_CODINA_CHN) || defined(CONFIG_MACH_CODINA_EURO) || defined(CONFIG_MACH_CODINA)
+	if (lcd->esd_enable && !lcd->esd_processing && !sec_lpm_bootmode
+							&& (sec_bootmode != 2)) {
+#else
+	if (lcd->esd_enable && !lcd->esd_processing && !power_off_charging
+						&& (sec_bootmode != 2)) {
+#endif
 
-	pr_info("%s lcd->esd_enable:%d start\n", __func__, lcd->esd_enable);
-
-	if (lcd->esd_enable) {
+		pr_info("%s lcd->esd_enable:%d start\n", __func__,
+						lcd->esd_enable);
+		lcd->esd_processing = true;
 		s6d27a1_dpi_power_off(lcd);
 		s6d27a1_dpi_power_on(lcd);
+		lcd->esd_processing = false;
 
 		/* low is normal. On PBA esd_port could be HIGH */
 		if (gpio_get_value(lcd->esd_port)) {
 			pr_info("%s esd_work_func re-armed\n", __func__);
 			queue_work(lcd->esd_workqueue, &(lcd->esd_work));
 		}
+		pr_info("%s end\n", __func__);		
 	}
-
-	pr_info("%s end\n", __func__);
 }
 
 static irqreturn_t esd_interrupt_handler(int irq, void *data)
 {
 	struct s6d27a1_dpi *lcd = data;
+#if defined(CONFIG_MACH_CODINA_CHN) || defined(CONFIG_MACH_CODINA_EURO) || defined(CONFIG_MACH_CODINA)
+	if (lcd->esd_enable && !lcd->esd_processing && !sec_lpm_bootmode
+								&& (sec_bootmode != 2)) {
+#else
+	if (lcd->esd_enable && !lcd->esd_processing && !power_off_charging
+						&& (sec_bootmode != 2)) {
+#endif
 
-	pr_info("%s lcd->esd_enable :%d\n", __func__, lcd->esd_enable);
-
-	if (lcd->esd_enable) {
+		pr_info("%s lcd->esd_enable :%d\n", __func__, lcd->esd_enable);		
 		if (list_empty(&(lcd->esd_work.entry)))
 			queue_work(lcd->esd_workqueue, &(lcd->esd_work));
 		else
@@ -860,7 +949,7 @@ static void est_test_timer_func(unsigned long data)
 }
 #endif
 #endif
-static int __devinit s6d27a1_dpi_spi_probe(struct spi_device *spi)
+static int __init s6d27a1_dpi_spi_probe(struct spi_device *spi)
 {
 	int ret = 0;
 	struct s6d27a1_dpi *lcd = container_of(spi->dev.driver,
@@ -926,6 +1015,7 @@ static int __devinit s6d27a1_dpi_spi_probe(struct spi_device *spi)
 			lcd->lcd_connected = 0;
 		}
 	}
+	lcd->esd_processing = false;
 
 	dev_info(lcd->dev, "esd work success\n");
 
@@ -971,6 +1061,7 @@ static int __devinit s6d27a1_dpi_mcde_probe(
 
 	ddev->try_video_mode = try_video_mode;
 	ddev->set_video_mode = set_video_mode;
+	/* ddev->update = s6d27a1_display_update; */
 	ddev->set_rotation = s6d27a1_set_rotation;
 
 	lcd = kzalloc(sizeof(struct s6d27a1_dpi), GFP_KERNEL);
@@ -983,7 +1074,7 @@ static int __devinit s6d27a1_dpi_mcde_probe(
 	lcd->mdd = ddev;
 	lcd->dev = &ddev->dev;
 	lcd->pd = pdata;
-
+	lcd->turn_on_backlight = false;
 	lcd->opp_is_requested = false;
 	s6d27a1_request_opp(lcd);
 
@@ -1081,25 +1172,14 @@ static void s6d27a1_dpi_mcde_shutdown(struct mcde_display_device *ddev)
 	struct s6d27a1_dpi *lcd = dev_get_drvdata(&ddev->dev);
 
 	dev_dbg(&ddev->dev, "Invoked %s\n", __func__);
-
-	#ifdef ESD_OPERATION
-	if (lcd->esd_enable) {
-
-		lcd->esd_enable = 0;
-		disable_irq_nosync(GPIO_TO_IRQ(lcd->esd_port));
-
-		if (!list_empty(&(lcd->esd_work.entry))) {
-			cancel_work_sync(&(lcd->esd_work));
-			pr_info("%s cancel_work_sync", __func__);
-		}
-
-		destroy_workqueue(lcd->esd_workqueue);
-	}
-	#endif
-
+	mutex_lock(&ddev->display_lock);
 	s6d27a1_dpi_power(lcd, FB_BLANK_POWERDOWN);
-	kfree(lcd);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unregister_early_suspend(&lcd->earlysuspend);
+#endif
 
+	kfree(lcd);
+	mutex_unlock(&ddev->display_lock);
 	dev_dbg(&ddev->dev, "end %s\n", __func__);
 }
 
@@ -1153,23 +1233,6 @@ static void s6d27a1_dpi_mcde_early_suspend(
 						earlysuspend);
 	pm_message_t dummy;
 
-	#ifdef ESD_OPERATION
-	if (lcd->esd_enable) {
-
-		lcd->esd_enable = 0;
-		irq_set_irq_type(GPIO_TO_IRQ(lcd->esd_port), IRQF_TRIGGER_NONE);
-		disable_irq_nosync(GPIO_TO_IRQ(lcd->esd_port));
-
-		if (!list_empty(&(lcd->esd_work.entry))) {
-			cancel_work_sync(&(lcd->esd_work));
-			pr_info("%s cancel_work_sync", __func__);
-		}
-
-		pr_info("%s change lcd->esd_enable :%d", __func__,
-				lcd->esd_enable);
-	}
-	#endif
-
 	s6d27a1_dpi_mcde_suspend(lcd->mdd, dummy);
 
 }
@@ -1181,26 +1244,13 @@ static void s6d27a1_dpi_mcde_late_resume(
 						struct s6d27a1_dpi,
 						earlysuspend);
 
-	#ifdef ESD_OPERATION
-	if (lcd->lcd_connected)
-		enable_irq(GPIO_TO_IRQ(lcd->esd_port));
-	#endif
 
 	s6d27a1_dpi_mcde_resume(lcd->mdd);
 
-	#ifdef ESD_OPERATION
-	if (lcd->lcd_connected) {
-		irq_set_irq_type(GPIO_TO_IRQ(lcd->esd_port), IRQF_TRIGGER_RISING);
-		lcd->esd_enable = 1;
-		pr_info("%s change lcd->esd_enable :%d", __func__,
-				lcd->esd_enable);
-	} else
-		pr_info("%s lcd_connected : %d", __func__, lcd->lcd_connected);
-	#endif
 }
 #endif
 
-static struct mcde_display_driver s6d27a1_dpi_mcde __refdata = {
+static struct mcde_display_driver s6d27a1_dpi_mcde = {
 	.probe          = s6d27a1_dpi_mcde_probe,
 	.remove         = s6d27a1_dpi_mcde_remove,
 	.shutdown	= s6d27a1_dpi_mcde_shutdown,

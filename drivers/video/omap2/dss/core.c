@@ -183,16 +183,19 @@ static int omap_dss_probe(struct platform_device *pdev)
 		goto err_dss;
 	}
 
-	r = dispc_init_platform_driver();
-	if (r) {
-		DSSERR("Failed to initialize dispc platform driver\n");
-		goto err_dispc;
-	}
+	/* keep clocks enabled to prevent context saves/restores during init */
+	dss_clk_enable(DSS_CLK_ICK | DSS_CLK_FCK);
 
 	r = rfbi_init_platform_driver();
 	if (r) {
 		DSSERR("Failed to initialize rfbi platform driver\n");
 		goto err_rfbi;
+	}
+
+	r = dispc_init_platform_driver();
+	if (r) {
+		DSSERR("Failed to initialize dispc platform driver\n");
+		goto err_dispc;
 	}
 
 	r = venc_init_platform_driver();
@@ -235,6 +238,8 @@ static int omap_dss_probe(struct platform_device *pdev)
 			pdata->default_device = dssdev;
 	}
 
+	dss_clk_disable(DSS_CLK_ICK | DSS_CLK_FCK);
+
 	return 0;
 
 err_register:
@@ -263,11 +268,11 @@ static int omap_dss_remove(struct platform_device *pdev)
 
 	dss_uninitialize_debugfs();
 
-	hdmi_uninit_platform_driver();
-	dsi_uninit_platform_driver();
 	venc_uninit_platform_driver();
-	rfbi_uninit_platform_driver();
 	dispc_uninit_platform_driver();
+	rfbi_uninit_platform_driver();
+	dsi_uninit_platform_driver();
+	hdmi_uninit_platform_driver();
 	dss_uninit_platform_driver();
 
 	dss_uninit_overlays(pdev);

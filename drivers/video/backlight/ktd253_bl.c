@@ -33,8 +33,15 @@
 #include <video/ktd253x_bl.h>
 
 /* to be removed when driver works */
-//#define dev_dbg dev_info
+/* #define dev_dbg dev_info */
 
+#if defined(CONFIG_MACH_SEC_SKOMER)
+#define DEFAULT_RATIO			13
+#define DEFAULT_BRINGHESS		160
+#else
+#define DEFAULT_RATIO			12
+#define DEFAULT_BRINGHESS		160
+#endif
 
 #define KTD253_BACKLIGHT_OFF		0
 #define KTD253_MIN_CURRENT_RATIO	1	/* 1/32 full current */
@@ -244,8 +251,8 @@ static int ktd253_probe(struct platform_device *pdev)
 	pKtd253Data->currentRatio = KTD253_BACKLIGHT_OFF;
 	pKtd253Data->brightness = KTD253_BACKLIGHT_OFF;
 #else
-	pKtd253Data->currentRatio = 12;
-	pKtd253Data->brightness = 160;
+	pKtd253Data->currentRatio = DEFAULT_RATIO;
+	pKtd253Data->brightness = DEFAULT_BRINGHESS;
 #endif
 	pKtd253Data->pd = pdev->dev.platform_data;
 
@@ -265,10 +272,8 @@ static int ktd253_probe(struct platform_device *pdev)
 		ret = PTR_ERR(ktd253_backlight_device);
 	} else {
 		ktd253_backlight_device->props.power      = FB_BLANK_UNBLANK;
-#if 0 // HW request. Down the backlight because of current consumption.
-		ktd253_backlight_device->props.brightness = ktd253_backlight_device->props.max_brightness;
+		ktd253_backlight_device->props.brightness = DEFAULT_BRINGHESS;
 		ktd253_set_brightness(ktd253_backlight_device);
-#endif
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND

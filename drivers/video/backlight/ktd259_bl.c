@@ -35,8 +35,7 @@
 /* to be removed when driver works */
 //#define dev_dbg dev_info
 
-#define DEFAULT_RATIO			13
-#define DEFAULT_BRINGHESS		160
+
 #define KTD259_BACKLIGHT_OFF		0
 #define KTD259_MIN_CURRENT_RATIO	1	/* 1/32 full current */
 #define KTD259_MAX_CURRENT_RATIO	32	/* 32/32 full current */
@@ -236,8 +235,8 @@ static int ktd259_probe(struct platform_device *pdev)
 
 	pKtd259Data = kmalloc(sizeof(struct ktd259), GFP_KERNEL);
 	memset(pKtd259Data, 0, sizeof(struct ktd259));
-	pKtd259Data->currentRatio = DEFAULT_RATIO;
-	pKtd259Data->brightness = DEFAULT_BRINGHESS;
+	pKtd259Data->currentRatio = KTD259_BACKLIGHT_OFF;
+	pKtd259Data->brightness = KTD259_BACKLIGHT_OFF;
 	pKtd259Data->pd = pdev->dev.platform_data;
 
 	memset(&props, 0, sizeof(struct backlight_properties));
@@ -256,7 +255,7 @@ static int ktd259_probe(struct platform_device *pdev)
 		ret = PTR_ERR(ktd259_backlight_device);
 	} else {
 		ktd259_backlight_device->props.power      = FB_BLANK_UNBLANK;
-		ktd259_backlight_device->props.brightness = DEFAULT_BRINGHESS;
+		ktd259_backlight_device->props.brightness = ktd259_backlight_device->props.max_brightness;
 		ktd259_set_brightness(ktd259_backlight_device);
 	}
 

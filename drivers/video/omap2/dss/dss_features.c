@@ -49,9 +49,6 @@ struct omap_dss_features {
 	const enum omap_color_mode *supported_color_modes;
 	const char * const *clksrc_names;
 	const struct dss_param_range *dss_params;
-
-	const u32 buffer_size_unit;
-	const u32 burst_size_unit;
 };
 
 /* This struct is assigned to one of the below during initialization */
@@ -277,8 +274,6 @@ static const struct omap_dss_features omap2_dss_features = {
 	.supported_color_modes = omap2_dss_supported_color_modes,
 	.clksrc_names = omap2_dss_clk_source_names,
 	.dss_params = omap2_dss_param_range,
-	.buffer_size_unit = 1,
-	.burst_size_unit = 8,
 };
 
 /* OMAP3 DSS Features */
@@ -291,9 +286,7 @@ static const struct omap_dss_features omap3430_dss_features = {
 		FEAT_LCDENABLESIGNAL | FEAT_PCKFREEENABLE |
 		FEAT_FUNCGATED | FEAT_ROWREPEATENABLE |
 		FEAT_LINEBUFFERSPLIT | FEAT_RESIZECONF |
-		FEAT_DSI_PLL_FREQSEL | FEAT_DSI_REVERSE_TXCLKESC |
-		FEAT_VENC_REQUIRES_TV_DAC_CLK | FEAT_CPR | FEAT_PRELOAD |
-		FEAT_FIR_COEF_V,
+		FEAT_DSI_PLL_FREQSEL | FEAT_DSI_REVERSE_TXCLKESC,
 
 	.num_mgrs = 2,
 	.num_ovls = 3,
@@ -301,8 +294,6 @@ static const struct omap_dss_features omap3430_dss_features = {
 	.supported_color_modes = omap3_dss_supported_color_modes,
 	.clksrc_names = omap3_dss_clk_source_names,
 	.dss_params = omap3_dss_param_range,
-	.buffer_size_unit = 1,
-	.burst_size_unit = 8,
 };
 
 static const struct omap_dss_features omap3630_dss_features = {
@@ -315,8 +306,7 @@ static const struct omap_dss_features omap3630_dss_features = {
 		FEAT_PRE_MULT_ALPHA | FEAT_FUNCGATED |
 		FEAT_ROWREPEATENABLE | FEAT_LINEBUFFERSPLIT |
 		FEAT_RESIZECONF | FEAT_DSI_PLL_PWR_BUG |
-		FEAT_DSI_PLL_FREQSEL | FEAT_CPR | FEAT_PRELOAD |
-		FEAT_FIR_COEF_V,
+		FEAT_DSI_PLL_FREQSEL,
 
 	.num_mgrs = 2,
 	.num_ovls = 3,
@@ -324,8 +314,6 @@ static const struct omap_dss_features omap3630_dss_features = {
 	.supported_color_modes = omap3_dss_supported_color_modes,
 	.clksrc_names = omap3_dss_clk_source_names,
 	.dss_params = omap3_dss_param_range,
-	.buffer_size_unit = 1,
-	.burst_size_unit = 8,
 };
 
 /* OMAP4 DSS Features */
@@ -339,8 +327,7 @@ static const struct omap_dss_features omap4430_es1_0_dss_features  = {
 		FEAT_MGR_LCD2 | FEAT_GLOBAL_ALPHA_VID1 |
 		FEAT_CORE_CLK_DIV | FEAT_LCD_CLK_SRC |
 		FEAT_DSI_DCS_CMD_CONFIG_VC | FEAT_DSI_VC_OCP_WIDTH |
-		FEAT_DSI_GNQ | FEAT_HANDLE_UV_SEPARATE | FEAT_ATTR2 |
-		FEAT_CPR | FEAT_PRELOAD | FEAT_FIR_COEF_V,
+		FEAT_DSI_GNQ | FEAT_HANDLE_UV_SEPARATE | FEAT_ATTR2,
 
 	.num_mgrs = 3,
 	.num_ovls = 3,
@@ -348,8 +335,6 @@ static const struct omap_dss_features omap4430_es1_0_dss_features  = {
 	.supported_color_modes = omap4_dss_supported_color_modes,
 	.clksrc_names = omap4_dss_clk_source_names,
 	.dss_params = omap4_dss_param_range,
-	.buffer_size_unit = 16,
-	.burst_size_unit = 16,
 };
 
 /* For all the other OMAP4 versions */
@@ -363,8 +348,7 @@ static const struct omap_dss_features omap4_dss_features = {
 		FEAT_CORE_CLK_DIV | FEAT_LCD_CLK_SRC |
 		FEAT_DSI_DCS_CMD_CONFIG_VC | FEAT_DSI_VC_OCP_WIDTH |
 		FEAT_DSI_GNQ | FEAT_HDMI_CTS_SWMODE |
-		FEAT_HANDLE_UV_SEPARATE | FEAT_ATTR2 | FEAT_CPR |
-		FEAT_PRELOAD | FEAT_FIR_COEF_V,
+		FEAT_HANDLE_UV_SEPARATE | FEAT_ATTR2,
 
 	.num_mgrs = 3,
 	.num_ovls = 3,
@@ -372,8 +356,6 @@ static const struct omap_dss_features omap4_dss_features = {
 	.supported_color_modes = omap4_dss_supported_color_modes,
 	.clksrc_names = omap4_dss_clk_source_names,
 	.dss_params = omap4_dss_param_range,
-	.buffer_size_unit = 16,
-	.burst_size_unit = 16,
 };
 
 /* Functions returning values related to a DSS feature */
@@ -417,16 +399,6 @@ bool dss_feat_color_mode_supported(enum omap_plane plane,
 const char *dss_feat_get_clk_source_name(enum omap_dss_clk_source id)
 {
 	return omap_current_dss_features->clksrc_names[id];
-}
-
-u32 dss_feat_get_buffer_size_unit(void)
-{
-	return omap_current_dss_features->buffer_size_unit;
-}
-
-u32 dss_feat_get_burst_size_unit(void)
-{
-	return omap_current_dss_features->burst_size_unit;
 }
 
 /* DSS has_feature check */
