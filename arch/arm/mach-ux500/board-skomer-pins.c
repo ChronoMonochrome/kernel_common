@@ -118,7 +118,7 @@ static pin_cfg_t skomer_bringup_pins[] = {
 	GPIO94_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO95_GPIO		| PIN_INPUT_PULLDOWN, /* NC */
 	GPIO96_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO97_GPIO		| PIN_INPUT_NOPULL,	/* BT_HOST_WAKE */
+	GPIO97_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 
 	/* MMC2 (eMMC) */
 	GPIO128_MC2_CLK		| PIN_OUTPUT_LOW,
@@ -175,7 +175,7 @@ static pin_cfg_t skomer_bringup_pins[] = {
 	GPIO196_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO197_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO198_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO199_GPIO		| PIN_OUTPUT_LOW,	/* BT_WAKE */
+	GPIO199_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO200_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO201_GPIO		| PIN_INPUT_PULLDOWN, /* NC */
 	GPIO202_GPIO		| PIN_INPUT_PULLDOWN, /* NC */
@@ -202,7 +202,7 @@ static pin_cfg_t skomer_bringup_pins[] = {
 	GPIO219_GPIO		| PIN_INPUT_PULLDOWN, /* NC */
 	GPIO220_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO221_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO222_GPIO		| PIN_OUTPUT_LOW,	/* BT_VREG_EN */
+	GPIO222_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO223_GPIO		| PIN_OUTPUT_HIGH,	/* MEM_LDO_EN */
 	GPIO224_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO225_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
@@ -211,10 +211,6 @@ static pin_cfg_t skomer_bringup_pins[] = {
 	GPIO228_GPIO		| PIN_OUTPUT_LOW,	/* CAM_MCLK */
 	GPIO229_GPIO		| PIN_INPUT_NOPULL, /* TSP_SDA_1V8 */
 	GPIO230_GPIO		| PIN_INPUT_NOPULL, /* TSP_SCL_1V8 */
-};
-
-static pin_cfg_t skomer_rev05_pins[] = {
-	GPIO86_GPIO		| PIN_OUTPUT_LOW,	/* GPS_ON_OFF */
 };
 
 /* STM trace or SD Card pin configurations */
@@ -320,17 +316,6 @@ static UX500_PINS(skomer_pins_usb,
 	GPIO267_USB_DAT0,
 );
 
-static UX500_PINS(skomer_pins_uart0,
-	GPIO0_U0_CTSn	| PIN_INPUT_PULLUP |
-		PIN_SLPM_GPIO | PIN_SLPM_INPUT_NOPULL,
-	GPIO1_U0_RTSn	| PIN_OUTPUT_HIGH |
-		PIN_SLPM_GPIO | PIN_SLPM_OUTPUT_HIGH,
-	GPIO2_U0_RXD	| PIN_INPUT_PULLUP |
-		PIN_SLPM_GPIO | PIN_SLPM_INPUT_NOPULL,
-	GPIO3_U0_TXD	| PIN_OUTPUT_HIGH |
-		PIN_SLPM_GPIO | PIN_SLPM_OUTPUT_HIGH,
-);
-
 static struct ux500_pin_lookup skomer_bringup_lookup_pins[] = {
 	PIN_LOOKUP("mcde-dpi", &skomer_bringup_mcde_dpi),
 	PIN_LOOKUP("nmk-i2c.0", &skomer_bringup_i2c0),
@@ -339,14 +324,6 @@ static struct ux500_pin_lookup skomer_bringup_lookup_pins[] = {
 	//PIN_LOOKUP("nmk-i2c.3", &skomer_bringup_i2c3),
 	PIN_LOOKUP("musb-ux500.0", &skomer_pins_usb),
 	PIN_LOOKUP("ab-iddet.0", &skomer_pins_usb),
-	PIN_LOOKUP("uart0", &skomer_pins_uart0),
-};
-
-static pin_cfg_t skomer_gps_uart_pins[] = {
-	GPIO4_U1_RXD | PIN_INPUT_PULLUP,
-	GPIO5_U1_TXD | PIN_OUTPUT_HIGH,
-	GPIO6_U1_CTSn | PIN_INPUT_PULLUP,
-	GPIO7_U1_RTSn | PIN_OUTPUT_HIGH,
 };
 
 static void __init gps_pins_init(void)
@@ -356,24 +333,6 @@ static void __init gps_pins_init(void)
 		pr_err("Failed to create device(gps)!\n");
 
 	BUG_ON(!gps_dev);
-
-	printk("gps_pins_init!!\n");
-
-	nmk_config_pins(skomer_gps_uart_pins,
-		ARRAY_SIZE(skomer_gps_uart_pins));
-
-	gpio_request(GPS_RST_N_SKOMER_BRINGUP, "GPS_nRST");
-	gpio_direction_output(GPS_RST_N_SKOMER_BRINGUP, 1);
-	gpio_request(GPS_ON_OFF_SKOMER_BRINGUP, "GPS_ON_OFF");
-	gpio_direction_output(GPS_ON_OFF_SKOMER_BRINGUP, 0);
-
-	gpio_export(GPS_RST_N_SKOMER_BRINGUP, 1);
-	gpio_export(GPS_ON_OFF_SKOMER_BRINGUP, 1);
-
-	gpio_export_link(gps_dev, "GPS_nRST", GPS_RST_N_SKOMER_BRINGUP);
-	gpio_export_link(gps_dev, "GPS_ON_OFF", GPS_ON_OFF_SKOMER_BRINGUP);
-
-	printk("gps_pins_init done!!\n");
 }
 
 static void __init sdmmc_pins_init(void)
@@ -443,10 +402,10 @@ static pin_cfg_t skomer_bringup_power_save_bank0[] = {
 	GPIO2_GPIO | PIN_INPUT_PULLUP,	/* GBF_UART_RXD */
 	GPIO3_GPIO | PIN_OUTPUT_LOW,	/* GBF_UART_TXD */
 
-	GPIO4_GPIO | PIN_INPUT_PULLUP,	/* GPS_UART_RXD */
-	GPIO5_GPIO | PIN_OUTPUT_HIGH,	/* GPS_UART_TXD */
-	GPIO6_GPIO | PIN_INPUT_PULLUP,	/* GPS_UART_CTS */
-	GPIO7_GPIO | PIN_OUTPUT_HIGH,	/* GPS_UART_RTS */
+	GPIO4_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO5_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO6_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO7_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 
 	GPIO8_GPIO | PIN_INPUT_PULLDOWN,	/* CAM_I2C_SDA */
 	GPIO9_GPIO | PIN_INPUT_PULLDOWN,	/* CAM_I2C_SCL */
@@ -540,7 +499,7 @@ static pin_cfg_t skomer_common_sleep_table[] = {
 	GPIO94_GPIO | PIN_INPUT_PULLDOWN,
 	GPIO95_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO96_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
-/*	GPIO97_GPIO | PIN_INPUT_PULLDOWN,*/	/* NC */
+	GPIO97_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 
 /*	GPIO128_GPIO | PIN_OUTPUT_HIGH, */
 /*	GPIO129_GPIO | PIN_OUTPUT_HIGH, */
@@ -599,7 +558,7 @@ static pin_cfg_t skomer_common_sleep_table[] = {
 	GPIO196_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO197_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO198_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
-/*	GPIO199_GPIO | PIN_INPUT_PULLDOWN,*//* NC */
+	GPIO199_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 
 	GPIO200_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO201_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
@@ -625,7 +584,7 @@ static pin_cfg_t skomer_common_sleep_table[] = {
 
 	GPIO220_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO221_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
-/*	GPIO222_GPIO | PIN_INPUT_PULLDOWN,*//* NC */
+	GPIO222_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 /*	GPIO223_GPIO | PIN_OUTPUT_LOW,*/	/* MEM_LDO_EN */
 	GPIO224_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO225_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
@@ -654,10 +613,6 @@ static pin_cfg_t skomer_rev02_sleep_table[] = {
 	GPIO193_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 };
 
-static pin_cfg_t skomer_rev05_sleep_table[] = {
-	GPIO86_GPIO		| PIN_OUTPUT_LOW,	/* GPS_ON_OFF */
-};
-
 /*
  * This function is called to force gpio power save
  * settings during suspend.
@@ -683,9 +638,6 @@ static void skomer_pins_suspend_force(void)
 	if (system_rev == SKOMER_R0_2)
 		nmk_config_pins(skomer_rev02_sleep_table,
 				ARRAY_SIZE(skomer_rev02_sleep_table));
-	else if (system_rev >= SKOMER_R0_5)
-		nmk_config_pins(skomer_rev05_sleep_table,
-				ARRAY_SIZE(skomer_rev05_sleep_table));
 }
 
 /*
@@ -769,10 +721,6 @@ void __init ssg_pins_init(void)
 {
 	nmk_config_pins(skomer_bringup_pins,
 		ARRAY_SIZE(skomer_bringup_pins));
-
-	if (system_rev >= SKOMER_R0_5)
-		nmk_config_pins(skomer_rev05_pins, ARRAY_SIZE(skomer_rev05_pins));
-
 	ux500_pins_add(skomer_bringup_lookup_pins,
 		ARRAY_SIZE(skomer_bringup_lookup_pins));
 	gps_pins_init();

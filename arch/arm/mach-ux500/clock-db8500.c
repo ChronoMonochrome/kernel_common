@@ -165,7 +165,7 @@ static struct clkops ab8500_sysclk_ops = {
 
 static int ab_ulpclk_enable(struct clk *clk)
 {
-#if defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE)
+#if defined(CONFIG_MACH_SEC_SKOMER) || defined(CONFIG_MACH_CODINA)
 	/*
 	 * Request AB ULP PLL so that prcmu firmware can not disable it in deep sleep
 	 * 0002-u8500-clock-Request-AB-ULP-PLL-for-FM-radio.patch
@@ -222,7 +222,7 @@ regulator_enable_error:
 
 static void ab_ulpclk_disable(struct clk *clk)
 {
-#if defined(CONFIG_MACH_CODINA) || defined(CONFIG_MACH_SEC_KYLE)
+#if defined(CONFIG_MACH_SEC_SKOMER) || defined(CONFIG_MACH_CODINA)
 	int err;
 	err = ab8500_sysctrl_clear(AB8500_SYSULPCLKCTRL1,
 		AB8500_SYSULPCLKCTRL1_ULPCLKREQ);	

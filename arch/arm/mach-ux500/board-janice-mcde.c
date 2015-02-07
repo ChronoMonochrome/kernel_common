@@ -29,9 +29,6 @@
 #include <mach/db8500-regs.h>
 #include <linux/ktime.h>
 
-#if defined (CONFIG_SAMSUNG_USE_GETLOG)
-#include <mach/sec_getlog.h>
-#endif
 
 #define PRCMU_DPI_CLK_FREQ	49920000
 	 
@@ -275,10 +272,6 @@ static int display_postregistered_callback(struct notifier_block *nb,
 
 		if (ddev->id == PRIMARY_DISPLAY_ID)
 			primary_fbi = fbi;
-#if defined (CONFIG_SAMSUNG_USE_GETLOG)
-					sec_getlog_supply_fbinfo(primary_fbi);
-#endif
-
 	}
 
 #ifdef CONFIG_DISPDEV

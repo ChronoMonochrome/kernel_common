@@ -166,7 +166,7 @@ typedef struct {
 extern void (*sec_set_param_value) (int idx, void *value);
 extern void (*sec_get_param_value) (int idx, void *value);
 
-#if defined(CONFIG_MACH_JANICE_CHN) || defined(CONFIG_MACH_SEC_GOLDEN_CHN) || defined(CONFIG_MACH_CODINA_CHN) || defined (CONFIG_MACH_GAVINI_CHN)
+#if defined(CONFIG_MACH_JANICE_CHN) || defined(CONFIG_MACH_SEC_GOLDEN_CHN)
 extern int alarm_en_exit;
 #endif
 

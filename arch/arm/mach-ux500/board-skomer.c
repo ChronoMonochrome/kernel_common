@@ -1139,7 +1139,7 @@ struct gpio_keys_button skomer_bringup_gpio_keys[] = {
 	.active_low = 1,
 	.desc = "volup_key",
 	.type = EV_KEY,		/* input event type (EV_KEY, EV_SW) */
-	.wakeup = 1,
+	.wakeup = 0,
 	.debounce_interval = 30,	/* debounce ticks interval in msecs */
 	.can_disable = false,
 	},
@@ -1149,7 +1149,7 @@ struct gpio_keys_button skomer_bringup_gpio_keys[] = {
 	.active_low = 1,
 	.desc = "voldown_key",
 	.type = EV_KEY,		/* input event type (EV_KEY, EV_SW) */
-	.wakeup = 1,		/* configure the button as a wake-up source */
+	.wakeup = 0,		/* configure the button as a wake-up source */
 	.debounce_interval = 30,	/* debounce ticks interval in msecs */
 	.can_disable = false,
 	},
@@ -1223,7 +1223,7 @@ struct gpio_keys_button skomer_r02_gpio_keys[] = {
 	.active_low = 1,
 	.desc = "volup_key",
 	.type = EV_KEY,		/* input event type (EV_KEY, EV_SW) */
-	.wakeup = 1,
+	.wakeup = 0,
 	.debounce_interval = 30,	/* debounce ticks interval in msecs */
 	.can_disable = false,
 	},
@@ -1233,7 +1233,7 @@ struct gpio_keys_button skomer_r02_gpio_keys[] = {
 	.active_low = 1,
 	.desc = "voldown_key",
 	.type = EV_KEY,		/* input event type (EV_KEY, EV_SW) */
-	.wakeup = 1,		/* configure the button as a wake-up source */
+	.wakeup = 0,		/* configure the button as a wake-up source */
 	.debounce_interval = 30,	/* debounce ticks interval in msecs */
 	.can_disable = false,
 	},
@@ -1875,7 +1875,7 @@ static struct sec_jack_zone sec_jack_zones[] = {
 		/* 1000 < adc <= 1749, default to 4 pole if it stays */
 		/* in this range for 40ms (20ms delays, 2 samples)
 		 */
-		.adc_high = 1850,
+		.adc_high = 1749,
 		.delay_ms = 20,
 		.check_count = 2,
 		.jack_type = SEC_HEADSET_4POLE,
@@ -1897,19 +1897,19 @@ static struct sec_jack_buttons_zone sec_jack_buttons_zones[] = {
 		/* 0 <= adc <=90, stable zone */
 		.code		= KEY_MEDIA,
 		.adc_low	= 0,
-		.adc_high	= 115,
+		.adc_high	= 90,
 	},
 	{
 		/* 91 <= adc <= 240, stable zone */
 		.code		= KEY_VOLUMEUP,
-		.adc_low	= 116,
-		.adc_high	= 237,
+		.adc_low	= 91,
+		.adc_high	= 240,
 	},
 	{
 		/* 241 <= adc <= 550, stable zone */
 		.code		= KEY_VOLUMEDOWN,
-		.adc_low	= 238,
-		.adc_high	= 620,
+		.adc_low	= 241,
+		.adc_high	= 550,
 	},
 };
 
@@ -1978,7 +1978,7 @@ struct sec_jack_platform_data sec_jack_pdata = {
 	.buttons_f = "ACC_DETECT_21DB_F",
 	.regulator_mic_source = "v-amic1",
 #ifdef CONFIG_SAMSUNG_JACK_SW_WATERPROOF
-	.ear_reselector_zone    = 1653,
+	.ear_reselector_zone    = 1650,
 #endif
 };
 #endif
@@ -2239,10 +2239,10 @@ static const unsigned short ktd253CurrentRatioLookupTable[] = {
 113,    /* (8/32) */
 122,    /* (9/32) */
 131,    /* (10/32) */
-145,    /* (11/32) */
-159,    /* (12/32) */
-169,    /* (13/32) */
-179,    /* (14/32) */
+150,    /* (11/32) */
+168,    /* (12/32) */
+175,    /* (13/32) */
+182,    /* (14/32) */
 189,    /* (15/32) */
 196,    /* (16/32) */
 203,    /* (17/32) */
@@ -2282,16 +2282,8 @@ static struct platform_device skomer_backlight_device = {
 		.platform_data = &skomer_bl_platform_info,
 	},
 };
-
-#if defined(CONFIG_TORCH_FLASH)
-
-static struct platform_device torch_flash_device = {
-	.name 		= "torch-flash",
-	.id 		= -1,
-};
-
 #endif
-#endif
+
 
 
 
@@ -2411,9 +2403,6 @@ static struct platform_device *platform_devs[] __initdata = {
 #endif
 #if defined(CONFIG_BACKLIGHT_KTD253)
 	&skomer_backlight_device,
-#if defined (CONFIG_TORCH_FLASH)
-	&torch_flash_device,
-#endif
 #endif
 #ifdef CONFIG_ANDROID_TIMED_GPIO
 	&skomer_timed_gpios_device,
@@ -2683,26 +2672,6 @@ static int __init board_id_setup(char *str)
 		printk(KERN_INFO "SKOMER Board for Rev0.3\n");
 		system_rev = SKOMER_R0_3;
 		break;
-	case 0x0105:
-		printk(KERN_INFO "SKOMER Board for Rev0.4\n");
-		system_rev = SKOMER_R0_4;
-		break;
-	case 0x0106:
-		printk(KERN_INFO "SKOMER Board for Rev0.5\n");
-		system_rev = SKOMER_R0_5;
-		break;				
-	case 0x0107:
-		printk(KERN_INFO "SKOMER Board for Rev0.6\n");
-		system_rev = SKOMER_R0_6;
-		break;	
-	case 0x0108:
-		printk(KERN_INFO "SKOMER Board for Rev0.7\n");
-		system_rev = SKOMER_R0_7;
-		break;	
-	case 0x0109:
-		printk(KERN_INFO "SKOMER Board for Rev0.8\n");
-		system_rev = SKOMER_R0_8;
-		break;	
 	default:
 		printk(KERN_INFO "Unknown board_id=%c\n", *str);
 		system_rev = SKOMER_R0_0;

@@ -138,13 +138,6 @@ static struct ab8500_regulator_reg_init
 	 */
 	INIT_REGULATOR_REGISTER(AB8500_REGUCTRL1VAMIC,         0x03, 0x00),
 	/*
-	 * VsmpsARegu
-	 * VsmpsASelCtrl
-	 * VsmpsAAutoMode
-	 * VsmpsAPWMMode
-	 */
-	INIT_REGULATOR_REGISTER(AB8500_VSMPS1REGU,             0x03, 0x01),
-	/*
 	 * VPll                     = Hw controlled (NOTE! PRCMU bits)
 	 * VanaRegu                 = force off
 	 */
@@ -605,11 +598,7 @@ static struct ab8500_regulator_reg_init	codina_ab8505_reg_init[] = {
 	 * VsmpsAAutoMode
 	 * VsmpsAPWMMode
 	 */
-#if 0
 	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x06),
-#else
-	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x05),
-#endif
 	/*
 	 * VsmpsBRegu
 	 * VsmpsBSelCtrl
@@ -875,11 +864,7 @@ static struct ab8500_regulator_reg_init	codina_ab8505_r0_4_reg_init[] = {
 	 * VsmpsAAutoMode
 	 * VsmpsAPWMMode
 	 */
-#if 0
 	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x06),
-#else
-	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x05),
-#endif
 	/*
 	 * VsmpsBRegu
 	 * VsmpsBSelCtrl

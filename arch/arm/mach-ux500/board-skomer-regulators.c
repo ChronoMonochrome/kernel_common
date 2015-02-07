@@ -126,7 +126,7 @@ static struct ab8500_regulator_reg_init
 	 * Vintcore12LP             = inactive (HP)
 	 * VTVoutLP                 = inactive (HP)
 	 */
-	INIT_REGULATOR_REGISTER(AB8500_REGUMISC1,              0xfe, 0x10),
+	INIT_REGULATOR_REGISTER(AB8500_REGUMISC1,              0xfe, 0x14),
 	/*
 	 * VaudioEna                = disabled
 	 * VdmicEna                 = disabled
@@ -602,7 +602,7 @@ static struct ab8500_regulator_reg_init	skomer_ab8505_reg_init[] = {
 	 * VsmpsAAutoMode
 	 * VsmpsAPWMMode
 	 */
-	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x05),
+	INIT_REGULATOR_REGISTER(AB8505_VSMPSAREGU,             0x0f, 0x06),
 	/*
 	 * VsmpsBRegu
 	 * VsmpsBSelCtrl

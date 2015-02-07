@@ -59,11 +59,6 @@
 #define SKOMER_R0_1   	102
 #define	SKOMER_R0_2		103
 #define	SKOMER_R0_3		104
-#define	SKOMER_R0_4		105
-#define	SKOMER_R0_5		106
-#define	SKOMER_R0_6		107
-#define	SKOMER_R0_7		108
-#define	SKOMER_R0_8		109
 
 #define HENDRIX_AB8505_IDDET_VER	0x0104
 #define HENDRIX_R0_0	101
@@ -349,7 +344,6 @@ extern unsigned int sec_debug_settings;
 #define LCD_BL_CTRL_CODINA_R0_4		69
 #define GPS_ON_OFF_CODINA_BRINGUP	86
 #define GPS_RST_N_CODINA_BRINGUP	209
-#define GPS_RST_N_CODINA_BRINGUP_R0_4        21
 
 /* GPIO for Codina V0.5 boards */
 #define GPS_RST_N_CODINA_BRINGUP_R0_5        21
@@ -516,7 +510,7 @@ extern unsigned int sec_debug_settings;
 #define T_FLASH_DETECT_SKOMER_BRINGUP	217
 #define TSP_INT_SKOMER_BRINGUP		218
 #define LCD_PWR_EN_SKOMER_BRINGUP	219
-#define SENSORS_INT_SKOMER_BRINGUP	224
+#define SENSORS_INT_SKOMER_BRINGUP	222
 #define MEM_LDO_EN_SKOMER_BRINGUP	223
 #define TSP_SDA_SKOMER_BRINGUP		229
 #define TSP_SCL_SKOMER_BRINGUP		230

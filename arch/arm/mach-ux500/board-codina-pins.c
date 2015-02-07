@@ -27,23 +27,6 @@
 #include <linux/workqueue.h>
 #include <mach/board-sec-ux500.h>
 #include "board-codina-regulators.h"
-#define IORA 1
-#ifdef IORA
-
- 
-  void breakpoint_iora_init()
-{
-	pr_info("breakpoint_iora_init...!!!");
-}
-EXPORT_SYMBOL(breakpoint_iora_init);
-
- void breakpoint_iora_suspend()
-{
-	pr_info("breakpoint_iora_suspend...!!!");
-}
-EXPORT_SYMBOL(breakpoint_iora_suspend);
-
-#endif
 
 /*
 * Configuration of pins, pull resisitors states
@@ -51,15 +34,11 @@ EXPORT_SYMBOL(breakpoint_iora_suspend);
 static pin_cfg_t codina_r0_0_pins[] = {
 	GPIO68_GPIO		| PIN_OUTPUT_HIGH,	/* LCD_BL_CTRL */
 	GPIO69_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO130_MC2_FBCLK	| PIN_INPUT_NOPULL,
-	GPIO194_GPIO	| PIN_OUTPUT_LOW,	/* KEY_LED_EN */
 };
 
 static pin_cfg_t codina_r0_4_pins[] = {
 	GPIO68_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO69_GPIO		| PIN_OUTPUT_HIGH,	/* LCD_BL_CTRL */
-	GPIO130_GPIO	| PIN_INPUT_PULLDOWN,	/* NC*/ 
-	GPIO194_GPIO	| PIN_INPUT_PULLDOWN,	/* NC*/	
 };
 
 static pin_cfg_t codina_common_pins[] = {
@@ -90,8 +69,6 @@ static pin_cfg_t codina_common_pins[] = {
 	GPIO14_MSP0_TCK,
 	GPIO15_MSP0_RXD,
 
-	GPIO16_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO17_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO18_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO19_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO20_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
@@ -100,8 +77,8 @@ static pin_cfg_t codina_common_pins[] = {
 	GPIO29_U2_RXD	| PIN_INPUT_PULLUP,
 	GPIO30_U2_TXD	| PIN_OUTPUT_HIGH,
 
-	GPIO31_GPIO		| PIN_INPUT_PULLDOWN,	/* NFC FIRMWARE */ /*T*/
-	GPIO32_GPIO		| PIN_INPUT_PULLDOWN,	/* NFC IRQ */
+	GPIO31_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO32_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 
 	/* MSP AB8500 */
 	GPIO33_MSP1_TXD,
@@ -111,13 +88,13 @@ static pin_cfg_t codina_common_pins[] = {
 
 	GPIO64_GPIO		| PIN_OUTPUT_LOW,	/* VT_CAM_STBY */
 	GPIO65_GPIO		| PIN_OUTPUT_LOW,	/* RST_VT_CAM */
-	GPIO66_GPIO		| PIN_INPUT_PULLDOWN,	/* 5M_CAM_ID NC*/
+	GPIO66_GPIO		| PIN_INPUT_NOPULL,	/* 5M_CAM_ID */
 	GPIO67_GPIO		| PIN_INPUT_PULLUP,	/* VOL_UP */
 
 /*	GPIO86_GPIO		| PIN_INPUT_PULLDOWN,	/ GPS_ON_OFF (R2) */ /* GPS_Joons */
 	GPIO86_GPIO		| PIN_OUTPUT_LOW,	/* GPS_ON_OFF */
 	GPIO87_GPIO		| PIN_OUTPUT_LOW,	/* TXS0206-29_EN */
-	GPIO88_GPIO		| PIN_INPUT_PULLDOWN,	/* NFC ON */ /*NC  T*/
+	GPIO88_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO89_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO90_GPIO		| PIN_INPUT_PULLDOWN,	/* SERVICE_AB8505 (OPEN) */
 
@@ -125,13 +102,14 @@ static pin_cfg_t codina_common_pins[] = {
 	GPIO92_GPIO		| PIN_INPUT_PULLUP,	/* VOL_DOWN */
 	GPIO93_GPIO		| PIN_INPUT_NOPULL,	/* LCD_DETECT */
 	GPIO94_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO95_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO95_GPIO		| PIN_INPUT_PULLUP,	/* JACK_nINT */
 	GPIO96_GPIO		| PIN_INPUT_PULLDOWN,	/* GPS_ON_OFF (R0) */
 	GPIO97_GPIO		| PIN_INPUT_NOPULL,	/* BT_HOST_WAKE */
 
 	/* MMC2 (eMMC) */
 	GPIO128_MC2_CLK		| PIN_OUTPUT_LOW,
 	GPIO129_MC2_CMD		| PIN_INPUT_PULLUP,
+	GPIO130_MC2_FBCLK	| PIN_INPUT_NOPULL,
 	GPIO131_MC2_DAT0	| PIN_INPUT_PULLUP,
 	GPIO132_MC2_DAT1	| PIN_INPUT_PULLUP,
 	GPIO133_MC2_DAT2	| PIN_INPUT_PULLUP,
@@ -153,8 +131,8 @@ static pin_cfg_t codina_common_pins[] = {
 
 	GPIO149_GPIO		| PIN_OUTPUT_LOW,	/* RST_5M_CAM */
 
-	GPIO151_GPIO		| PIN_INPUT_PULLDOWN,	/* NFC_SCL GPIO I2C */ /*NC T*/
-	GPIO152_GPIO		| PIN_INPUT_PULLDOWN,	/* NFC_SDA GPIO I2C */ /*NC T */
+	GPIO151_GPIO		| PIN_INPUT_PULLDOWN,	/* COMP_SCL */
+	GPIO152_GPIO		| PIN_INPUT_PULLDOWN,	/* COMP_SDA */
 	GPIO153_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO154_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO155_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
@@ -166,6 +144,7 @@ static pin_cfg_t codina_common_pins[] = {
 
 	GPIO192_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO193_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO194_GPIO		| PIN_OUTPUT_LOW,	/* KEY_LED_EN */
 	GPIO195_GPIO		| PIN_OUTPUT_LOW,	/* MOT_EN */
 	GPIO196_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO197_GPIO		| PIN_INPUT_PULLDOWN,	/* NC */
@@ -374,14 +353,6 @@ static void __init gps_pins_init(void)
         	gpio_export(GPS_RST_N_CODINA_BRINGUP_R0_5, 1);
         	gpio_export_link(gps_dev, "GPS_nRST", GPS_RST_N_CODINA_BRINGUP_R0_5);
 	}
-#if defined(CONFIG_MACH_CODINA_EURO)
-    else if(system_rev == CODINA_R0_4) {
-            gpio_request(GPS_RST_N_CODINA_BRINGUP_R0_4, "GPS_nRST");
-            gpio_direction_output(GPS_RST_N_CODINA_BRINGUP_R0_4, 1);
-            gpio_export(GPS_RST_N_CODINA_BRINGUP_R0_4, 1);
-            gpio_export_link(gps_dev, "GPS_nRST", GPS_RST_N_CODINA_BRINGUP_R0_4);
-    }
-#endif
 	else
 	{
 		gpio_request(GPS_RST_N_CODINA_BRINGUP, "GPS_nRST");
@@ -419,14 +390,8 @@ static void __init sdmmc_pins_init(void)
 		/* also need to ensure VAUX3 turned on (defaults to 2.91V) */
 		codina_ab8500_regulators[AB8500_LDO_AUX3].constraints.valid_ops_mask = 0;
 		codina_ab8500_regulators[AB8500_LDO_AUX3].constraints.always_on = 1;
-		if(system_rev >= CODINA_TMO_R0_4) {
-			codina_ab8505_r0_4_regulators[AB9540_LDO_AUX3].constraints.valid_ops_mask = 0;
-			codina_ab8505_r0_4_regulators[AB9540_LDO_AUX3].constraints.always_on = 1;
-		}
-		else {
-			codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.valid_ops_mask = 0;
-			codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.always_on = 1;
-		}
+		codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.valid_ops_mask = 0;
+		codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.always_on = 1;
 
 		printk(KERN_INFO "SD Card I/F set for STM APE Trace\n");
 
@@ -443,14 +408,8 @@ static void __init sdmmc_pins_init(void)
 		/* also need to ensure VAUX3 turned on (defaults to 2.91V) */
 		codina_ab8500_regulators[AB8500_LDO_AUX3].constraints.valid_ops_mask = 0;
 		codina_ab8500_regulators[AB8500_LDO_AUX3].constraints.always_on = 1;
-		if(system_rev >= CODINA_TMO_R0_4) {
-			codina_ab8505_r0_4_regulators[AB9540_LDO_AUX3].constraints.valid_ops_mask = 0;
-			codina_ab8505_r0_4_regulators[AB9540_LDO_AUX3].constraints.always_on = 1;
-		}
-		else {
-			codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.valid_ops_mask = 0;
-			codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.always_on = 1;
-		}
+		codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.valid_ops_mask = 0;
+		codina_ab8505_regulators[AB9540_LDO_AUX3].constraints.always_on = 1;
 
 		printk(KERN_INFO "SD Card I/F set for STM Modem Trace\n");
 	} else if (sec_debug_settings & SEC_DBG_STM_FIDO_OPT) {
@@ -495,8 +454,8 @@ static pin_cfg_t codina_r0_0_power_save_bank0[] = {
 	GPIO14_GPIO | PIN_OUTPUT_LOW,  /* GBF_IOM_CLK */
 	GPIO15_GPIO | PIN_INPUT_NOPULL,  /* GBF_IOM_DIN */
 
-	GPIO16_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
-	GPIO17_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
+	GPIO16_GPIO | PIN_INPUT_NOPULL,  /* MUS_SCL */
+	GPIO17_GPIO | PIN_INPUT_NOPULL,  /* MUS_SDA */
 	GPIO18_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 	GPIO19_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 
@@ -507,7 +466,7 @@ static pin_cfg_t codina_r0_0_power_save_bank0[] = {
 
 	GPIO29_GPIO | PIN_INPUT_PULLUP,  /* IF_RXD */
 	GPIO30_GPIO | PIN_OUTPUT_HIGH,  /* IF_TXD */
-	/* GPIO31_GPIO | PIN_INPUT_PULLDOWN,  */ /* Commented SNMC NFC */
+	GPIO31_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 };
 
 static pin_cfg_t codina_r0_0_sdmmc_sleep[] = {
@@ -533,24 +492,15 @@ static pin_cfg_t codina_r0_0_sdmmc_sleep[] = {
 static pin_cfg_t codina_r0_0_sleep_table[] = {
 	GPIO68_GPIO | PIN_OUTPUT_LOW,  /* LCD_BL_CTRL */
 	GPIO69_GPIO | PIN_INPUT_PULLDOWN,
-	GPIO194_GPIO| PIN_OUTPUT_LOW,	/* KEY_LED_EN */	
 };
 
 static pin_cfg_t codina_r0_4_sleep_table[] = {
 	GPIO68_GPIO | PIN_INPUT_PULLDOWN,
 	GPIO69_GPIO | PIN_OUTPUT_LOW,   /* LCD_BL_CTRL */
-	GPIO130_GPIO| PIN_INPUT_PULLDOWN,	/* NC*/ 	
-	GPIO194_GPIO| PIN_INPUT_PULLDOWN,	/* NC*/		
 };
 
 static pin_cfg_t codina_common_sleep_table[] = {
-	
-	GPIO16_GPIO | PIN_INPUT_NOPULL, 
-	GPIO17_GPIO | PIN_INPUT_NOPULL, 
-	/* GPIO29_U2_RXD| PIN_INPUT_PULLDOWN, 
-	GPIO30_U2_TXD| PIN_OUTPUT_LOW, */ 
-	GPIO31_GPIO | PIN_INPUT_PULLDOWN,/*NC t*/
-	GPIO32_GPIO | PIN_INPUT_PULLDOWN,  /* NFC IRQ */
+	GPIO32_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 	GPIO33_GPIO | PIN_OUTPUT_LOW,
 	GPIO34_GPIO | PIN_INPUT_NOPULL,
 	GPIO35_GPIO | PIN_INPUT_NOPULL,
@@ -558,7 +508,7 @@ static pin_cfg_t codina_common_sleep_table[] = {
 
 	GPIO64_GPIO | PIN_OUTPUT_LOW,  /* VT_CAM_STBY */
 	GPIO65_GPIO | PIN_OUTPUT_LOW,  /* RST_VT_CAM */
-	GPIO66_GPIO | PIN_INPUT_PULLDOWN,  /* 5M_CAM_ID NC */
+	GPIO66_GPIO | PIN_INPUT_NOPULL,  /* 5M_CAM_ID */
 	GPIO67_GPIO | PIN_INPUT_PULLUP,	/* VOL_UP */
 
 	GPIO70_GPIO | PIN_INPUT_PULLDOWN,
@@ -580,18 +530,17 @@ static pin_cfg_t codina_common_sleep_table[] = {
 	GPIO85_GPIO | PIN_INPUT_PULLDOWN,
 	GPIO86_GPIO | PIN_OUTPUT_LOW, /* EN_GPS */ /* GPS_Joons */
 	/*GPIO87_GPIO | PIN_OUTPUT_LOW,*/	/* TXS0206-29_EN */
-        /*GPIO88_GPIO | PIN_INPUT_PULLDOWN, */ /* commented SNMC NFC NC */
-	GPIO88_GPIO | PIN_INPUT_PULLDOWN,/*NC t*/
+	GPIO88_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 	GPIO89_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 
 	GPIO90_GPIO | PIN_INPUT_PULLDOWN,  /* SERVICE_AB8505 (OPEN) */
 	GPIO91_GPIO | PIN_INPUT_PULLUP,  /* HOME_KEY */
 	GPIO92_GPIO | PIN_INPUT_PULLUP,	/* VOL_DOWN */
 	GPIO93_GPIO | PIN_INPUT_PULLUP,  /* LCD_DETECT */
-	GPIO94_GPIO | PIN_OUTPUT_LOW,	/* NC */ 
-	GPIO95_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
+	GPIO94_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO95_GPIO | PIN_INPUT_PULLUP,  /* JACK_nINT */
 	GPIO96_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
-	GPIO97_GPIO | PIN_INPUT_PULLDOWN, 	/* BT_HOST_WAKE */ 
+/*	GPIO97_GPIO | PIN_INPUT_PULLDOWN, */	/* BT_HOST_WAKE */
 
 /*	GPIO128_GPIO | PIN_OUTPUT_HIGH, */
 /*	GPIO129_GPIO | PIN_OUTPUT_HIGH, */
@@ -619,8 +568,8 @@ static pin_cfg_t codina_common_sleep_table[] = {
 	GPIO149_GPIO | PIN_OUTPUT_LOW,  /* RST_5M_CAM */
 
 	GPIO150_GPIO | PIN_OUTPUT_LOW,	/* LCD_MCLK */
-	GPIO151_GPIO | PIN_INPUT_PULLDOWN,	/* NFC_SCL_1V8 */ /*NC*/
-	GPIO152_GPIO | PIN_INPUT_PULLDOWN,	/* NFC_SDA_1V8 */ /*NC*/
+	GPIO151_GPIO | PIN_INPUT_NOPULL,	/* COMP_SCL_1V8 */
+	GPIO152_GPIO | PIN_INPUT_NOPULL,	/* COMP_SDA_1V8 */
 	GPIO153_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO154_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO155_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
@@ -645,6 +594,7 @@ static pin_cfg_t codina_common_sleep_table[] = {
 
 	GPIO192_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
 	GPIO193_GPIO | PIN_INPUT_PULLDOWN,	/* NC */
+	GPIO194_GPIO | PIN_OUTPUT_LOW,  /* KEY_LED_EN */
 	GPIO195_GPIO | PIN_OUTPUT_LOW,  /* MOT_EN */
 	GPIO196_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 	GPIO197_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
@@ -661,12 +611,8 @@ static pin_cfg_t codina_common_sleep_table[] = {
 	GPIO207_GPIO | PIN_INPUT_PULLDOWN,  /* NC */
 	GPIO208_GPIO | PIN_OUTPUT_LOW,  /* WLAN_SDIO_CLK */
 /*	GPIO209_GPIO | PIN_OUTPUT_LOW, */ /* BT_RST_N */
-#if defined(CONFIG_MACH_CODINA_CHN)||defined(CONFIG_MACH_CODINA_EURO)
-/*	GPIO209_GPIO | PIN_OUTPUT_HIGH,  */  /* BT_RST_N */ /* jine.wang */
+	GPIO209_GPIO | PIN_OUTPUT_HIGH,    /* GBF_RESETN */ /* GPS_Joons */
 
-#else
-	GPIO209_GPIO | PIN_OUTPUT_HIGH,   /* GBF_RESETN */ /* GPS_Joons */
-#endif
 	GPIO210_GPIO | PIN_INPUT_PULLUP,
 	GPIO211_GPIO | PIN_INPUT_PULLUP,
 	GPIO212_GPIO | PIN_INPUT_PULLUP,
@@ -711,7 +657,6 @@ static pin_cfg_t codina_common_sleep_table[] = {
  * This is a temporary solution until all drivers are
  * controlling their pin settings when in inactive mode.
  */
-
 static void codina_pins_suspend_force(void)
 {
 	nmk_config_pins(codina_r0_0_power_save_bank0,
@@ -735,9 +680,7 @@ static void codina_pins_suspend_force(void)
 		nmk_config_pins(codina_r0_4_sleep_table,
 			ARRAY_SIZE(codina_r0_4_sleep_table));
 	}
-#ifdef IORA
-		breakpoint_iora_suspend();
-	#endif
+
 }
 
 /*
@@ -829,7 +772,7 @@ void __init ssg_pins_init(void)
 	}
 	else {
 		nmk_config_pins(codina_r0_4_pins,
-			ARRAY_SIZE(codina_r0_4_pins));  
+			ARRAY_SIZE(codina_r0_4_pins));
 	}
 
 	ux500_pins_add(codina_r0_0_lookup_pins,
@@ -838,9 +781,6 @@ void __init ssg_pins_init(void)
 	sdmmc_pins_init();
 	suspend_set_pins_force_fn(codina_pins_suspend_force,
 				  codina_pins_suspend_force_mux);
-	#ifdef IORA
-		breakpoint_iora_init();
-	#endif
 }
 
 int pins_for_u9500(void)

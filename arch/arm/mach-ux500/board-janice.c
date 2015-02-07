@@ -52,6 +52,7 @@
 #include <plat/pincfg.h>
 #include <plat/i2c.h>
 #include <plat/ste_dma40.h>
+#include <plat/gpio-nomadik.h>
 
 #include <mach/devices.h>
 #if defined(CONFIG_LIGHT_PROX_GP2A)
@@ -1503,7 +1504,6 @@ static struct ab8500_gpio_platform_data ab8500_gpio_pdata = {
 	.config_pullups		= {0xE0, 0x1F, 0x00, 0x00, 0x80, 0x00},
 };
 
-
 static struct ab8500_sysctrl_platform_data ab8500_sysctrl_pdata = {
 	/*
 	 * SysClkReq1RfClkBuf - SysClkReq8RfClkBuf
@@ -1599,26 +1599,26 @@ static void sec_jack_mach_init(struct platform_device *pdev)
 	/* initialise threshold for ACCDETECT1 comparator
 	 * and the debounce for all ACCDETECT comparators */
 	ret = abx500_set_register_interruptible(&pdev->dev, AB8500_ECI_AV_ACC,
-						0x80, 0x31);
+		0x80, 0x31);
 	if (ret < 0)
-		pr_err("%s: ab8500 write failed\n", __func__);
+		pr_err("%s: ab8500 write failed\n",__func__);
 
 	/* initialise threshold for ACCDETECT2 comparator1 and comparator2 */
 	ret = abx500_set_register_interruptible(&pdev->dev, AB8500_ECI_AV_ACC,
-						0x81, 0xB3);
+		0x81, 0xB3);
 	if (ret < 0)
-		pr_err("%s: ab8500 write failed\n", __func__);
+		pr_err("%s: ab8500 write failed\n",__func__);
 
 	ret = abx500_set_register_interruptible(&pdev->dev, AB8500_ECI_AV_ACC,
-						0x82, 0x33); //KSND
+		0x82, 0x33);
+
 	if (ret < 0)
-		pr_err("%s: ab8500 write failed\n", __func__);
+		pr_err("%s: ab8500 write failed\n",__func__);
 
 	/* set output polarity to Gnd when VAMIC1 is disabled */
-	ret = abx500_set_register_interruptible(&pdev->dev, AB8500_REGU_CTRL1,
-						0x84, 0x1);
+	ret = abx500_set_register_interruptible(&pdev->dev, AB8500_REGU_CTRL1, 0x84, 0x1);
 	if (ret < 0)
-		pr_err("%s: ab8500 write failed\n", __func__);
+		pr_err("%s: ab8500 write failed\n",__func__);
 }
 
 int sec_jack_get_det_level(struct platform_device *pdev)
@@ -1626,11 +1626,8 @@ int sec_jack_get_det_level(struct platform_device *pdev)
 	u8 value = 0;
 	int ret = 0;
 
-	ret = abx500_get_register_interruptible(&pdev->dev, AB8500_INTERRUPT, 0x4,
+	abx500_get_register_interruptible(&pdev->dev, AB8500_INTERRUPT, 0x4,
 		&value);
-	if (ret < 0)
-		return ret;
-
 	ret = (value & 0x04) >> 2;
 	pr_info("%s: ret=%x\n", __func__, ret);
 
@@ -1649,10 +1646,7 @@ struct sec_jack_platform_data sec_jack_pdata = {
 	.det_f = "ACC_DETECT_1DB_F",
 	.buttons_r = "ACC_DETECT_21DB_R",
 	.buttons_f = "ACC_DETECT_21DB_F",
-	.regulator_mic_source = "v-amic1",
-#ifdef CONFIG_SAMSUNG_JACK_SW_WATERPROOF
-	.ear_reselector_zone    = 1650,
-#endif
+	.regulator_mic_source = "v-amic1"
 };
 #endif
 
