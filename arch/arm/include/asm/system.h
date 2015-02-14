@@ -97,6 +97,7 @@ void hook_ifault_code(int nr, int (*fn)(unsigned long, unsigned int,
 #define xchg(ptr,x) \
 	((__typeof__(*(ptr)))__xchg((unsigned long)(x),(ptr),sizeof(*(ptr))))
 
+extern asmlinkage void __backtrace(void);
 extern asmlinkage void c_backtrace(unsigned long fp, int pmode);
 
 struct mm_struct;
@@ -108,6 +109,8 @@ extern void cpu_init(void);
 
 void arm_machine_restart(char mode, const char *cmd);
 extern void (*arm_pm_restart)(char str, const char *cmd);
+
+void cpu_idle_wait(void);
 
 #define UDBG_UNDEFINED	(1 << 0)
 #define UDBG_SYSCALL	(1 << 1)
