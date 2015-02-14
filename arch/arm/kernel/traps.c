@@ -25,7 +25,9 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/sched.h>
-
+#ifdef CONFIG_SAMSUNG_LOG_BUF
+#include <linux/mfd/ux500_wdt.h>
+#endif
 #include <asm/atomic.h>
 #include <asm/cacheflush.h>
 #include <asm/system.h>
@@ -253,10 +255,21 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 		dump_instr(KERN_EMERG, regs);
 	}
 
+#ifdef CONFIG_SAMSUNG_LOG_BUF
+#ifdef CONFIG_SAMSUNG_EXTRA_DIE_ACTION
+	{
+		extern void sec_extra_die_actions(const char * str);
+#if 0
+		wdog_disable();
+#endif
+		sec_extra_die_actions(str);
+	}
+#endif
+#endif
 	return ret;
 }
 
-static DEFINE_RAW_SPINLOCK(die_lock);
+static DEFINE_SPINLOCK(die_lock);
 
 /*
  * This function is protected against re-entrancy.
@@ -264,18 +277,16 @@ static DEFINE_RAW_SPINLOCK(die_lock);
 void die(const char *str, struct pt_regs *regs, int err)
 {
 	struct thread_info *thread = current_thread_info();
+	unsigned long flags;
 	int ret;
-	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
 
 	oops_enter();
 
-	raw_spin_lock_irq(&die_lock);
+	spin_lock_irqsave(&die_lock, flags);
 	console_verbose();
 	bust_spinlocks(1);
 	if (!user_mode(regs))
-		bug_type = report_bug(regs->ARM_pc, regs);
-	if (bug_type != BUG_TRAP_TYPE_NONE)
-		str = "Oops - BUG";
+		report_bug(regs->ARM_pc, regs);
 	ret = __die(str, err, thread, regs);
 
 	if (regs && kexec_should_crash(thread->task))
@@ -283,7 +294,7 @@ void die(const char *str, struct pt_regs *regs, int err)
 
 	bust_spinlocks(0);
 	add_taint(TAINT_DIE);
-	raw_spin_unlock_irq(&die_lock);
+	spin_unlock_irqrestore(&die_lock, flags);
 	oops_exit();
 
 	if (in_interrupt())
@@ -326,24 +337,24 @@ int is_valid_bugaddr(unsigned long pc)
 #endif
 
 static LIST_HEAD(undef_hook);
-static DEFINE_RAW_SPINLOCK(undef_lock);
+static DEFINE_SPINLOCK(undef_lock);
 
 void register_undef_hook(struct undef_hook *hook)
 {
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&undef_lock, flags);
+	spin_lock_irqsave(&undef_lock, flags);
 	list_add(&hook->node, &undef_hook);
-	raw_spin_unlock_irqrestore(&undef_lock, flags);
+	spin_unlock_irqrestore(&undef_lock, flags);
 }
 
 void unregister_undef_hook(struct undef_hook *hook)
 {
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&undef_lock, flags);
+	spin_lock_irqsave(&undef_lock, flags);
 	list_del(&hook->node);
-	raw_spin_unlock_irqrestore(&undef_lock, flags);
+	spin_unlock_irqrestore(&undef_lock, flags);
 }
 
 static int call_undef_hook(struct pt_regs *regs, unsigned int instr)
@@ -352,12 +363,12 @@ static int call_undef_hook(struct pt_regs *regs, unsigned int instr)
 	unsigned long flags;
 	int (*fn)(struct pt_regs *regs, unsigned int instr) = NULL;
 
-	raw_spin_lock_irqsave(&undef_lock, flags);
+	spin_lock_irqsave(&undef_lock, flags);
 	list_for_each_entry(hook, &undef_hook, node)
 		if ((instr & hook->instr_mask) == hook->instr_val &&
 		    (regs->ARM_cpsr & hook->cpsr_mask) == hook->cpsr_val)
 			fn = hook->fn;
-	raw_spin_unlock_irqrestore(&undef_lock, flags);
+	spin_unlock_irqrestore(&undef_lock, flags);
 
 	return fn ? fn(regs, instr) : 1;
 }

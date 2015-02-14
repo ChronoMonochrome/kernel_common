@@ -30,9 +30,9 @@
 #include <linux/uaccess.h>
 #include <linux/random.h>
 #include <linux/hw_breakpoint.h>
+#include <linux/console.h>
 
 #include <asm/cacheflush.h>
-#include <asm/leds.h>
 #include <asm/processor.h>
 #include <asm/system.h>
 #include <asm/thread_notify.h>
@@ -61,6 +61,18 @@ extern void setup_mm_for_reboot(char mode);
 static volatile int hlt_counter;
 
 #include <mach/system.h>
+
+#ifdef CONFIG_SMP
+void arch_trigger_all_cpu_backtrace(void)
+{
+	smp_send_all_cpu_backtrace();
+}
+#else
+void arch_trigger_all_cpu_backtrace(void)
+{
+	dump_stack();
+}
+#endif
 
 void disable_hlt(void)
 {
@@ -91,8 +103,55 @@ static int __init hlt_setup(char *__unused)
 __setup("nohlt", nohlt_setup);
 __setup("hlt", hlt_setup);
 
+#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
+unsigned int unhandled_reset_count = 0;
+#endif /* CONFIG_SAMSUNG_KERNEL_DEBUG */
+
+#ifdef CONFIG_ARM_FLUSH_CONSOLE_ON_RESTART
+void arm_machine_flush_console(void)
+{
+	printk("\n");
+	pr_emerg("Restarting %s\n", linux_banner);
+	if (console_trylock()) {
+		console_unlock();
+		return;
+	}
+
+	mdelay(50);
+
+	local_irq_disable();
+	if (!console_trylock())
+		pr_emerg("arm_restart: Console was locked! Busting\n");
+	else
+		pr_emerg("arm_restart: Console was locked!\n");
+	console_unlock();
+}
+#else
+void arm_machine_flush_console(void)
+{
+}
+#endif
+
 void arm_machine_restart(char mode, const char *cmd)
 {
+
+#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
+	int i;
+
+	printk( "arm_machine_restart: mode: %c, cmd: %s\n", mode, cmd ) ;
+	/* reboot mode = Lockup */
+	if( 'L' == mode || 'U' == mode)	{
+		for(i=0; i<100; i++) {
+			arch_reset(mode, NULL);
+			unhandled_reset_count++;
+		}
+	}
+#endif /* CONFIG_SAMSUNG_KERNEL_DEBUG */
+
+	/* Flush the console to make sure all the relevant messages make it
+	 * out to the console drivers */
+	arm_machine_flush_console();
+
 	/* Disable interrupts first */
 	local_irq_disable();
 	local_fiq_disable();
@@ -183,7 +242,7 @@ void cpu_idle(void)
 	/* endless idle loop with no priority at all */
 	while (1) {
 		tick_nohz_stop_sched_tick(1);
-		leds_event(led_idle_start);
+		idle_notifier_call_chain(IDLE_START);
 		while (!need_resched()) {
 #ifdef CONFIG_HOTPLUG_CPU
 			if (cpu_is_offline(smp_processor_id())) {
@@ -216,8 +275,8 @@ void cpu_idle(void)
 				local_irq_enable();
 			}
 		}
-		leds_event(led_idle_end);
 		tick_nohz_restart_sched_tick();
+		idle_notifier_call_chain(IDLE_END);
 		preempt_enable_no_resched();
 		schedule();
 		preempt_disable();
@@ -256,7 +315,19 @@ void machine_power_off(void)
 
 void machine_restart(char *cmd)
 {
+#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
+	printk( "machine_restart: cmd: %s\n", cmd ) ;
+	/*reboot_mode = cmd[0];//kernel will crash at reboot-time. d.moskvitin */
+	if (cmd) 
+		reboot_mode = cmd[0];
+
+	printk( "machine_restart: reboot_mode: %c\n", reboot_mode );
+	printk( "machine_restart: arm_pm_restart: 0x%x\n", arm_pm_restart ) ;
+#endif /* CONFIG_SAMSUNG_KERNEL_DEBUG */
+
+#ifndef CONFIG_SAMSUNG_KERNEL_DEBUG
 	machine_shutdown();
+#endif
 	arm_pm_restart(reboot_mode, cmd);
 }
 
@@ -269,11 +340,8 @@ static void show_data(unsigned long addr, int nbytes, const char *name)
 	int	nlines;
 	u32	*p;
 
-	/*
-	 * don't attempt to dump non-kernel addresses or
-	 * values that are probably just small negative numbers
-	 */
-	if (addr < PAGE_OFFSET || addr > -256UL)
+	/* Only dump directly mapped memory */
+	if (addr < PAGE_OFFSET || addr >= (unsigned long)high_memory)
 		return;
 
 	printk("\n%s: %#lx:\n", name, addr);
@@ -399,7 +467,7 @@ void show_regs(struct pt_regs * regs)
 	printk("\n");
 	printk("Pid: %d, comm: %20s\n", task_pid_nr(current), current->comm);
 	__show_regs(regs);
-	dump_stack();
+	__backtrace();
 }
 
 ATOMIC_NOTIFIER_HEAD(thread_notify_head);
