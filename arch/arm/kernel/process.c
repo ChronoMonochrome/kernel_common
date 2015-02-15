@@ -410,7 +410,7 @@ void show_regs(struct pt_regs * regs)
 	printk("\n");
 	printk("Pid: %d, comm: %20s\n", task_pid_nr(current), current->comm);
 	__show_regs(regs);
-	dump_stack();
+	__backtrace();
 }
 
 ATOMIC_NOTIFIER_HEAD(thread_notify_head);
