@@ -879,13 +879,20 @@ static ssize_t ab3550_bank_write(struct file *file,
 	size_t count, loff_t *ppos)
 {
 	struct ab3550 *ab = ((struct seq_file *)(file->private_data))->private;
+	char buf[32];
+	int buf_size;
 	unsigned long user_bank;
 	int err;
 
 	/* Get userspace string and assure termination */
-	err = kstrtoul_from_user(user_buf, count, 0, &user_bank);
+	buf_size = min(count, (sizeof(buf) - 1));
+	if (copy_from_user(buf, user_buf, buf_size))
+		return -EFAULT;
+	buf[buf_size] = 0;
+
+	err = strict_strtoul(buf, 0, &user_bank);
 	if (err)
-		return err;
+		return -EINVAL;
 
 	if (user_bank >= AB3550_NUM_BANKS) {
 		dev_err(&ab->i2c_client[0]->dev,
@@ -895,7 +902,7 @@ static ssize_t ab3550_bank_write(struct file *file,
 
 	ab->debug_bank = user_bank;
 
-	return count;
+	return buf_size;
 }
 
 static int ab3550_address_print(struct seq_file *s, void *p)
@@ -916,21 +923,27 @@ static ssize_t ab3550_address_write(struct file *file,
 	size_t count, loff_t *ppos)
 {
 	struct ab3550 *ab = ((struct seq_file *)(file->private_data))->private;
+	char buf[32];
+	int buf_size;
 	unsigned long user_address;
 	int err;
 
 	/* Get userspace string and assure termination */
-	err = kstrtoul_from_user(user_buf, count, 0, &user_address);
-	if (err)
-		return err;
+	buf_size = min(count, (sizeof(buf) - 1));
+	if (copy_from_user(buf, user_buf, buf_size))
+		return -EFAULT;
+	buf[buf_size] = 0;
 
+	err = strict_strtoul(buf, 0, &user_address);
+	if (err)
+		return -EINVAL;
 	if (user_address > 0xff) {
 		dev_err(&ab->i2c_client[0]->dev,
 			"debugfs error input > 0xff\n");
 		return -EINVAL;
 	}
 	ab->debug_address = user_address;
-	return count;
+	return buf_size;
 }
 
 static int ab3550_val_print(struct seq_file *s, void *p)
@@ -958,15 +971,21 @@ static ssize_t ab3550_val_write(struct file *file,
 	size_t count, loff_t *ppos)
 {
 	struct ab3550 *ab = ((struct seq_file *)(file->private_data))->private;
+	char buf[32];
+	int buf_size;
 	unsigned long user_val;
 	int err;
 	u8 regvalue;
 
 	/* Get userspace string and assure termination */
-	err = kstrtoul_from_user(user_buf, count, 0, &user_val);
-	if (err)
-		return err;
+	buf_size = min(count, (sizeof(buf)-1));
+	if (copy_from_user(buf, user_buf, buf_size))
+		return -EFAULT;
+	buf[buf_size] = 0;
 
+	err = strict_strtoul(buf, 0, &user_val);
+	if (err)
+		return -EINVAL;
 	if (user_val > 0xff) {
 		dev_err(&ab->i2c_client[0]->dev,
 			"debugfs error input > 0xff\n");
@@ -983,7 +1002,7 @@ static ssize_t ab3550_val_write(struct file *file,
 	if (err)
 		return -EINVAL;
 
-	return count;
+	return buf_size;
 }
 
 static const struct file_operations ab3550_bank_fops = {
