@@ -410,8 +410,8 @@ void enter_upload_mode(unsigned long val)
 	int i;
 	struct gpio_keys_button *pButton;
 	if (g_bVolUp && jack_is_detected && g_bPower) {
-		dump_all_task_info();
-		dump_cpu_stat();
+		//dump_all_task_info();
+		//dump_cpu_stat();
 		panic("__forced_upload");
 	}
 }
